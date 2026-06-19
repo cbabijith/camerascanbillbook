@@ -517,8 +517,17 @@ export async function deleteBill(billId: string) {
 }
 
 export async function fetchAnalytics(startDate: string, endDate: string) {
-  const { user, role } = await getCurrentUserAndBranch()
-  if (!user || role !== 'admin') return []
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || profile.role !== 'admin') return []
 
   const { getAnalyticsData } = await import('@/lib/cached-queries')
   return getAnalyticsData(startDate, endDate)
