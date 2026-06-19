@@ -669,7 +669,7 @@ export default function BillingForm() {
                     billItems.map((item, index) => (
                       <TableRow key={index} className="border-zinc-200 hover:bg-white/10">
                         <TableCell>
-                          <div className="font-semibold text-zinc-800">{item.name}</div>
+                          <div className="font-semibold text-zinc-800 truncate max-w-[180px]" title={item.name}>{item.name.length > 10 ? item.name.slice(0, 10) + '...' : item.name}</div>
                           {item.brand && <div className="text-[10px] text-zinc-500">{item.brand}</div>}
                           {item.productId === 'new' && (
                             <Badge className="mt-1 bg-emerald-500/10 text-emerald-600 border border-emerald-200 text-[9px] px-1 py-0 h-4">
@@ -748,7 +748,7 @@ export default function BillingForm() {
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
-                          <div className="font-semibold text-zinc-800 text-sm">{item.name}</div>
+                          <div className="font-semibold text-zinc-800 text-sm truncate" title={item.name}>{item.name.length > 10 ? item.name.slice(0, 10) + '...' : item.name}</div>
                           {item.brand && <div className="text-[10px] text-zinc-500 mt-0.5">{item.brand}</div>}
                           {item.productId === 'new' && (
                             <Badge className="mt-1 bg-emerald-500/10 text-emerald-600 border border-emerald-200 text-[9px] px-1 py-0 h-4">
