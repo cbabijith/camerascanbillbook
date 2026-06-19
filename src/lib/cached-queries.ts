@@ -1,5 +1,4 @@
-import { unstable_cache } from 'next/cache'
-import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/server'
 
 /**
  * Cached server-side data queries.
@@ -14,119 +13,68 @@ import { createServerClient } from '@supabase/ssr'
  * (see server actions in /app/actions/).
  */
 
-function createCacheClient() {
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return []
-        },
-        setAll() {},
-      },
-    }
-  )
+async function createCacheClient() {
+  return createClient()
 }
 
-export const getCachedBills = (branchId: string) =>
-  unstable_cache(
-    async () => {
-      const supabase = createCacheClient()
-      const { data, error } = await supabase
-        .from('bills')
-        .select('*, profiles:user_id(name), payment_collections(*, profiles:collected_by(name))')
-        .eq('branch_id', branchId)
-        .order('created_at', { ascending: false })
-        .order('collected_at', { ascending: true, referencedTable: 'payment_collections' })
+export async function getCachedBills(branchId: string) {
+  const supabase = await createCacheClient()
+  const { data, error } = await supabase
+    .from('bills')
+    .select('*, profiles:user_id(name), payment_collections(*, profiles:collected_by(name))')
+    .eq('branch_id', branchId)
+    .order('created_at', { ascending: false })
+    .order('collected_at', { ascending: true, referencedTable: 'payment_collections' })
 
-      if (error) {
-        console.error('Error fetching bills:', error)
-        return []
-      }
-      return data || []
-    },
-    [`bills-${branchId}`],
-    {
-      tags: ['bills', `bills-${branchId}`],
-      revalidate: 60,
-    }
-  )()
+  if (error) {
+    console.error('Error fetching bills:', error)
+    return []
+  }
+  return data || []
+}
 
-export const getCachedCustomers = (branchId: string) =>
-  unstable_cache(
-    async () => {
-      const supabase = createCacheClient()
-      const { data } = await supabase
-        .from('customers')
-        .select('*, creator:profiles!created_by(name)')
-        .eq('branch_id', branchId)
-        .order('name', { ascending: true })
+export async function getCachedCustomers(branchId: string) {
+  const supabase = await createCacheClient()
+  const { data } = await supabase
+    .from('customers')
+    .select('*, creator:profiles!created_by(name)')
+    .eq('branch_id', branchId)
+    .order('name', { ascending: true })
 
-      return data || []
-    },
-    [`customers-${branchId}`],
-    {
-      tags: ['customers', `customers-${branchId}`],
-      revalidate: 60,
-    }
-  )()
+  return data || []
+}
 
-export const getCachedProducts = (branchId: string) =>
-  unstable_cache(
-    async () => {
-      const supabase = createCacheClient()
-      const { data } = await supabase
-        .from('products')
-        .select('*, creator:profiles!created_by(name)')
-        .eq('branch_id', branchId)
-        .order('name', { ascending: true })
+export async function getCachedProducts(branchId: string) {
+  const supabase = await createCacheClient()
+  const { data } = await supabase
+    .from('products')
+    .select('*, creator:profiles!created_by(name)')
+    .eq('branch_id', branchId)
+    .order('name', { ascending: true })
 
-      return data || []
-    },
-    [`products-${branchId}`],
-    {
-      tags: ['products', `products-${branchId}`],
-      revalidate: 60,
-    }
-  )()
+  return data || []
+}
 
-export const getCachedBranches = () =>
-  unstable_cache(
-    async () => {
-      const supabase = createCacheClient()
-      const { data } = await supabase
-        .from('branches')
-        .select('*')
-        .order('name', { ascending: true })
+export async function getCachedBranches() {
+  const supabase = await createCacheClient()
+  const { data } = await supabase
+    .from('branches')
+    .select('*')
+    .order('name', { ascending: true })
 
-      return data || []
-    },
-    ['all-branches'],
-    {
-      tags: ['branches'],
-      revalidate: 120,
-    }
-  )()
+  return data || []
+}
 
-export const getCachedStaff = () =>
-  unstable_cache(
-    async () => {
-      const supabase = createCacheClient()
-      const { data } = await supabase
-        .from('profiles')
-        .select('*, branches(name)')
-        .eq('role', 'staff')
-        .order('name', { ascending: true })
+export async function getCachedStaff() {
+  const supabase = await createCacheClient()
+  const { data } = await supabase
+    .from('profiles')
+    .select('*, branches(name)')
+    .eq('role', 'staff')
+    .order('name', { ascending: true })
 
-      return data || []
-    },
-    ['all-staff'],
-    {
-      tags: ['staff'],
-      revalidate: 120,
-    }
-  )()
+  return data || []
+}
 
 export interface BranchAnalytics {
   branchId: string
@@ -148,7 +96,7 @@ export interface BranchAnalytics {
 
 export async function getAnalyticsData(startDate: string, endDate: string): Promise<BranchAnalytics[]> {
   try {
-    const supabase = createCacheClient()
+    const supabase = await createCacheClient()
 
     const { data: branches, error: branchesError } = await supabase
       .from('branches')
