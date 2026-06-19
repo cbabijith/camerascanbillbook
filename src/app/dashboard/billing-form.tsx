@@ -342,27 +342,29 @@ export default function BillingForm() {
                   )}
 
                   {showCustomerSearch && customerSearch.trim().length > 0 && customerResults.length === 0 && (
-                    <div className="absolute z-20 w-full mt-1 p-3 border border-zinc-200 bg-white rounded-md text-zinc-500 text-xs text-center">
-                      No customer found matching "{customerSearch}"
+                    <div className="absolute z-20 w-full mt-1 p-3 border border-zinc-200 bg-white rounded-md text-zinc-500 text-xs text-center space-y-2">
+                      <div>No customer found matching "{customerSearch}"</div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const isPhone = /^[\d\s+\-()]+$/.test(customerSearch.trim())
+                          if (isPhone) {
+                            setNewCustomer({ ...newCustomer, phone: customerSearch.trim(), name: '' })
+                          } else {
+                            setNewCustomer({ ...newCustomer, name: customerSearch.trim(), phone: '' })
+                          }
+                          setIsNewCustomer(true)
+                        }}
+                        className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 gap-1.5"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        Add "{customerSearch}" as New Customer
+                      </Button>
                     </div>
                   )}
                 </div>
-
-                <div className="flex items-center justify-center py-2">
-                  <span className="h-px w-full bg-white" />
-                  <span className="px-3 text-xs text-zinc-500">OR</span>
-                  <span className="h-px w-full bg-white" />
-                </div>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsNewCustomer(true)}
-                  className="w-full border-zinc-200 hover:bg-white text-zinc-700 gap-2"
-                >
-                  <UserPlus className="h-4 w-4" />
-                  New Customer Inline
-                </Button>
               </div>
             ) : selectedCustomer ? (
               /* Selected Customer Card */
@@ -401,6 +403,7 @@ export default function BillingForm() {
                     value={newCustomer.phone}
                     onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
                     className="border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-indigo-600"
+                    required
                   />
                 </div>
                 <div className="space-y-2">
