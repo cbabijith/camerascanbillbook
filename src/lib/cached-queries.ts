@@ -147,21 +147,25 @@ export interface BranchAnalytics {
 }
 
 export async function getAnalyticsData(startDate: string, endDate: string): Promise<BranchAnalytics[]> {
-  const supabase = createCacheClient()
+  try {
+    const supabase = createCacheClient()
 
-  const { data: branches } = await supabase
-    .from('branches')
-    .select('id, name')
-    .order('name', { ascending: true })
+    const { data: branches, error: branchesError } = await supabase
+      .from('branches')
+      .select('id, name')
+      .order('name', { ascending: true })
 
-  if (!branches) return []
+    if (branchesError || !branches) {
+    console.error('Analytics branches error:', branchesError?.message)
+    return []
+  }
 
   const results: BranchAnalytics[] = []
 
   for (const branch of branches) {
     const { data: bills } = await supabase
       .from('bills')
-      .select('id, bill_number, customer_name, total, advance_amount, payment_status, user_id, created_at, profiles:user_id(name)')
+      .select('id, bill_number, customer_name, total, advance_amount, payment_status, user_id, created_at')
       .eq('branch_id', branch.id)
       .gte('created_at', startDate)
       .lt('created_at', endDate)
@@ -173,10 +177,14 @@ export async function getAnalyticsData(startDate: string, endDate: string): Prom
 
     const billIds = (bills || []).map(b => b.id)
 
-    const { data: collections } = await supabase
+    const { data: collections, error: collectionsError } = await supabase
       .from('payment_collections')
-      .select('id, bill_id, amount, payment_method, payment_type, collected_at, profiles:collected_by(name)')
+      .select('id, bill_id, amount, payment_method, payment_type, collected_at')
       .in('bill_id', billIds.length > 0 ? billIds : ['00000000-0000-0000-0000-000000000000'])
+
+    if (collectionsError) {
+      console.error('Collections query error:', collectionsError.message)
+    }
 
     const totalInvoices = bills?.length || 0
     const totalSales = (bills || []).reduce((sum, b) => sum + Number(b.total), 0)
@@ -208,9 +216,17 @@ export async function getAnalyticsData(startDate: string, endDate: string): Prom
     const totalDue = overdueDues.reduce((sum, d) => sum + d.amount, 0)
 
     const staffMap = new Map<string, { name: string; billCount: number; totalSales: number; collectedAmount: number }>()
+    const userIds = [...new Set((bills || []).map(b => b.user_id).filter(Boolean))]
+    const { data: profilesData } = await supabase
+      .from('profiles')
+      .select('id, name')
+      .in('id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000'])
+    const profileMap = new Map<string, string>()
+    for (const p of profilesData || []) {
+      profileMap.set(p.id, p.name)
+    }
     for (const bill of bills || []) {
-      const profileData = bill.profiles as unknown as { name: string } | { name: string }[] | null
-      const staffName = (Array.isArray(profileData) ? profileData[0]?.name : profileData?.name) || 'Unknown'
+      const staffName = profileMap.get(bill.user_id) || 'Unknown'
       const existing = staffMap.get(bill.user_id) || { name: staffName, billCount: 0, totalSales: 0, collectedAmount: 0 }
       existing.billCount += 1
       existing.totalSales += Number(bill.total)
@@ -250,5 +266,9 @@ export async function getAnalyticsData(startDate: string, endDate: string): Prom
     })
   }
 
-  return results
+    return results
+  } catch (err) {
+    console.error('Analytics data error:', err)
+    return []
+  }
 }
