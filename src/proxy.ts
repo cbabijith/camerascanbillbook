@@ -39,7 +39,11 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse
   }
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // Use getSession() instead of getUser() to avoid token refresh on every request.
+  // getUser() makes a network call and refreshes tokens, causing cookie bloat (HTTP 431).
+  // getSession() reads from the cookie without network calls.
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user ?? null
 
   const isDashboardRoute = path.startsWith('/dashboard')
   const isLoginRoute = path === '/login'
