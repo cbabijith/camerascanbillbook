@@ -30,7 +30,7 @@ export default function SidebarNav({ role }: { role: string }) {
   if (role !== 'admin') {
     links.unshift({
       name: 'Create Invoice',
-      href: '/dashboard',
+      href: '/dashboard/create',
       icon: PlusCircle,
       exact: true
     })

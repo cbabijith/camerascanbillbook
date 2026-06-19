@@ -30,7 +30,7 @@ export default function BottomNav({ role }: { role: string }) {
   if (role !== 'admin') {
     links.unshift({
       name: 'Create',
-      href: '/dashboard',
+      href: '/dashboard/create',
       icon: PlusCircle,
       exact: true
     })

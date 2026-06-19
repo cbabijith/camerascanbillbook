@@ -26,7 +26,7 @@ export default async function BillsPage() {
 
       {role === 'admin' && (
         <Link
-          href="/dashboard"
+          href="/dashboard/create"
           className="fixed bottom-20 right-6 md:bottom-6 z-50 flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 hover:bg-indigo-500 transition-colors"
         >
           <PlusCircle className="h-5 w-5" />
