@@ -23,6 +23,17 @@ interface BillItem {
   total: number
 }
 
+interface PaymentCollection {
+  id: string
+  amount: number
+  payment_type: 'advance' | 'partial' | 'final'
+  payment_method: 'upi' | 'bank' | 'cash' | 'card'
+  collected_at: string
+  profiles?: {
+    name: string
+  }
+}
+
 interface Bill {
   id: string
   bill_number: string
@@ -31,12 +42,15 @@ interface Bill {
   sub_total: number
   gst_amount: number
   total: number
-  payment_status: 'paid' | 'unpaid'
+  advance_amount?: number
+  discount?: number
+  payment_status: 'paid' | 'unpaid' | 'advance' | 'partial'
   created_at: string
   items: BillItem[]
   profiles?: {
     name: string
   }
+  payment_collections?: PaymentCollection[]
 }
 
 interface BranchInfo {
@@ -259,6 +273,8 @@ export function generateInvoicePDF(bill: Bill, branch: BranchInfo | null): jsPDF
   const statusText = bill.payment_status.toUpperCase()
   if (bill.payment_status === 'paid') {
     doc.setTextColor(22, 130, 60)
+  } else if (bill.payment_status === 'advance' || bill.payment_status === 'partial') {
+    doc.setTextColor(180, 120, 20)
   } else {
     doc.setTextColor(200, 30, 30)
   }
@@ -279,12 +295,12 @@ export function generateInvoicePDF(bill: Bill, branch: BranchInfo | null): jsPDF
 
   // Column positions (absolute x values)
   const cols = {
-    sno:    { x: ML,        w: 12  },
-    desc:   { x: ML + 12,   w: 98  },
-    sku:    { x: ML + 110,  w: 30  },
-    qty:    { x: ML + 140,  w: 15  },
-    price:  { x: ML + 155,  w: 35  },
-    amount: { x: ML + 160,  w: 30  },
+    sno:    { x: ML,        w: 12  }, // Starts at 10, ends at 22
+    desc:   { x: ML + 12,   w: 93  }, // Starts at 22, ends at 115
+    sku:    { x: ML + 105,  w: 30  }, // Starts at 115, ends at 145
+    qty:    { x: ML + 135,  w: 15  }, // Starts at 145, ends at 160
+    price:  { x: ML + 150,  w: 20  }, // Starts at 160, ends at 180
+    amount: { x: ML + 170,  w: 20  }, // Starts at 180, ends at 200
   }
 
   // Table header background
@@ -375,7 +391,7 @@ export function generateInvoicePDF(bill: Bill, branch: BranchInfo | null): jsPDF
   doc.text(String(totalQty), cols.qty.x + cols.qty.w / 2, y + 5.5, { align: 'center' })
 
   doc.setFontSize(9)
-  doc.text(formatPDFCurrency(bill.total), cols.amount.x + cols.amount.w - 2, y + 5.5, { align: 'right' })
+  doc.text(formatPDFCurrency(bill.sub_total), cols.amount.x + cols.amount.w - 2, y + 5.5, { align: 'right' })
 
   y += totalRowH
 
@@ -406,19 +422,106 @@ export function generateInvoicePDF(bill: Bill, branch: BranchInfo | null): jsPDF
   const breakdownStart = y
   let breakdownH = 0
 
-  // Simple layout: Only show "Grand Total" inside a simple 11mm box
-  const boxH = 11
+  // Show subtotal, discount, advance/due breakdown if applicable, then Grand Total
+  const hasAdvance = bill.payment_status !== 'paid' && bill.advance_amount && bill.advance_amount > 0
+  const hasDiscount = bill.discount && bill.discount > 0
+
+  // Calculate box height based on how many lines we need
+  let lines = 1 // Grand Total always
+  if (hasDiscount) lines += 2 // Adds Subtotal and Discount lines
+  if (hasAdvance) lines += 2
+  const lineH = 5.5
+  const boxH = lines * lineH + 3
+
+  let currentY = breakdownStart + 6
+
+  if (hasDiscount) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(80)
+    doc.text('Subtotal:', ML + 5, currentY)
+    doc.text(formatPDFCurrency(bill.sub_total), RX - 5, currentY, { align: 'right' })
+    currentY += lineH
+
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(200, 30, 30)
+    doc.text('Discount:', ML + 5, currentY)
+    doc.text(`- ${formatPDFCurrency(bill.discount!)}`, RX - 5, currentY, { align: 'right' })
+    currentY += lineH
+  }
+
+  if (hasAdvance) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(80)
+    doc.text('Advance Paid:', ML + 5, currentY)
+    doc.text(formatPDFCurrency(bill.advance_amount!), RX - 5, currentY, { align: 'right' })
+    currentY += lineH
+
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(180, 120, 20)
+    doc.text('Due Amount:', ML + 5, currentY)
+    doc.text(formatPDFCurrency(bill.total - bill.advance_amount!), RX - 5, currentY, { align: 'right' })
+    currentY += lineH
+  }
+
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
   doc.setTextColor(0)
-
-  doc.text('Grand Total:', ML + 5, breakdownStart + 7.5)
-  doc.text(formatPDFCurrency(bill.total), RX - 5, breakdownStart + 7.5, { align: 'right' })
+  doc.text('Grand Total:', ML + 5, currentY)
+  doc.text(formatPDFCurrency(bill.total), RX - 5, currentY, { align: 'right' })
 
   breakdownH = boxH
   y = breakdownStart + breakdownH
 
   drawRect(ML, breakdownStart, CW, breakdownH)
+
+  // ══════════════════════════════════════════════════
+  // SECTION 6.5: PAYMENT HISTORY
+  // ══════════════════════════════════════════════════
+  if (bill.payment_collections && bill.payment_collections.length > 0) {
+    const phStart = y
+    const phLineH = 5
+    const phHeaderH = 7
+    const phH = phHeaderH + bill.payment_collections.length * phLineH + 3
+
+    // Header
+    doc.setFillColor(245, 245, 245)
+    doc.rect(ML, y, CW, phHeaderH, 'FD')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
+    doc.setTextColor(0)
+    doc.text('Date', ML + 2, y + 5)
+    doc.text('Type', ML + 45, y + 5)
+    doc.text('Method', ML + 75, y + 5)
+    doc.text('Collected By', ML + 105, y + 5)
+    doc.text('Amount', RX - 2, y + 5, { align: 'right' })
+
+    y += phHeaderH
+
+    // Rows
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor(60, 60, 60)
+
+    bill.payment_collections.forEach((pc) => {
+      const dt = new Date(pc.collected_at)
+      const dateStr = `${dt.getDate().toString().padStart(2, '0')}-${(dt.getMonth() + 1).toString().padStart(2, '0')}-${dt.getFullYear()} ${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}`
+      doc.text(dateStr, ML + 2, y + 4)
+      doc.text(pc.payment_type, ML + 45, y + 4)
+      doc.text(pc.payment_method.toUpperCase(), ML + 75, y + 4)
+      doc.text(pc.profiles?.name || '-', ML + 105, y + 4)
+      doc.setTextColor(0)
+      doc.setFont('helvetica', 'bold')
+      doc.text(formatPDFCurrency(pc.amount), RX - 2, y + 4, { align: 'right' })
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(60, 60, 60)
+      y += phLineH
+    })
+
+    drawRect(ML, phStart, CW, phH)
+    y += 2
+  }
 
   // ══════════════════════════════════════════════════
   // SECTION 7: FOOTER — SIGNATURE & TERMS

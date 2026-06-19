@@ -91,14 +91,17 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists update_customers_updated_at on public.customers;
 create trigger update_customers_updated_at
     before update on public.customers
     for each row execute procedure public.update_updated_at_column();
 
+drop trigger if exists update_products_updated_at on public.products;
 create trigger update_products_updated_at
     before update on public.products
     for each row execute procedure public.update_updated_at_column();
 
+drop trigger if exists update_bills_updated_at on public.bills;
 create trigger update_bills_updated_at
     before update on public.bills
     for each row execute procedure public.update_updated_at_column();

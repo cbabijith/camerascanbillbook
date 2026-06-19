@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { searchCustomers, searchProducts, createBill } from '../actions/billing'
+import { searchCustomers, searchProducts, createBill, updateBill } from '../actions/billing'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -44,7 +44,34 @@ interface SelectedItem {
   qty: number
 }
 
-export default function BillingForm() {
+interface EditBillData {
+  id: string
+  bill_number: string
+  customer_id: string
+  customer_name: string
+  customer_phone: string
+  customer_email?: string | null
+  customer_address?: string | null
+  items: {
+    productId: string
+    name: string
+    brand: string
+    category: string
+    sku: string
+    sellingPrice: number
+    mrp?: number | null
+    qty: number
+  }[]
+  payment_status: 'paid' | 'unpaid' | 'advance' | 'partial'
+  advance_amount?: number
+  discount?: number
+}
+
+interface BillingFormProps {
+  editBill?: EditBillData | null
+}
+
+export default function BillingForm({ editBill }: BillingFormProps = {}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -60,6 +87,7 @@ export default function BillingForm() {
     address: ''
   })
   const [showCustomerSearch, setShowCustomerSearch] = useState(false)
+  const [showOptionalCustomerFields, setShowOptionalCustomerFields] = useState(false)
   const customerSearchRef = useRef<HTMLDivElement>(null)
 
   // Product Search State
@@ -72,7 +100,12 @@ export default function BillingForm() {
   const [billItems, setBillItems] = useState<SelectedItem[]>([])
 
   // Payment status
-  const [paymentStatus, setPaymentStatus] = useState<'paid' | 'unpaid'>('paid')
+  const [paymentStatus, setPaymentStatus] = useState<'paid' | 'unpaid' | 'advance'>('paid')
+  const [advanceAmount, setAdvanceAmount] = useState('')
+  const [discount, setDiscount] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState<'upi' | 'bank' | 'cash' | 'card'>('cash')
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [editBillId, setEditBillId] = useState<string | null>(null)
 
   // Inline Custom Product State
   const [isCustomProductOpen, setIsCustomProductOpen] = useState(false)
@@ -128,6 +161,39 @@ export default function BillingForm() {
     }
   }, [productSearch])
 
+  // Load edit bill data when provided
+  useEffect(() => {
+    if (editBill) {
+      setIsEditMode(true)
+      setEditBillId(editBill.id)
+      setSelectedCustomer({
+        id: editBill.customer_id,
+        name: editBill.customer_name,
+        phone: editBill.customer_phone,
+        email: editBill.customer_email || undefined,
+        address: editBill.customer_address || undefined
+      })
+      setBillItems(editBill.items.map((item) => ({
+        productId: item.productId as string | 'new',
+        name: item.name,
+        brand: item.brand,
+        category: item.category,
+        sku: item.sku,
+        sellingPrice: item.sellingPrice,
+        mrp: item.mrp,
+        qty: item.qty
+      })))
+      const status = editBill.payment_status === 'partial' ? 'advance' : editBill.payment_status
+      setPaymentStatus(status as 'paid' | 'unpaid' | 'advance')
+      if (editBill.advance_amount && editBill.advance_amount > 0) {
+        setAdvanceAmount(String(editBill.advance_amount))
+      }
+      if (editBill.discount && editBill.discount > 0) {
+        setDiscount(String(editBill.discount))
+      }
+    }
+  }, [editBill])
+
   // Select Customer
   const handleSelectCustomer = (customer: Customer) => {
     setSelectedCustomer(customer)
@@ -141,6 +207,7 @@ export default function BillingForm() {
     setSelectedCustomer(null)
     setIsNewCustomer(false)
     setNewCustomer({ name: '', phone: '', email: '', address: '' })
+    setShowOptionalCustomerFields(false)
   }
 
   // Select Product
@@ -236,13 +303,18 @@ export default function BillingForm() {
 
   // Calculation formulas
   const calculateTotals = () => {
-    let total = 0
+    let subtotal = 0
 
     billItems.forEach((item) => {
-      total += item.sellingPrice * item.qty
+      subtotal += item.sellingPrice * item.qty
     })
 
+    const discountAmount = discount ? Math.min(parseFloat(discount) || 0, subtotal) : 0
+    const total = Math.max(0, subtotal - discountAmount)
+
     return {
+      subtotal: Math.round(subtotal * 100) / 100,
+      discount: Math.round(discountAmount * 100) / 100,
       total: Math.round(total * 100) / 100
     }
   }
@@ -266,6 +338,18 @@ export default function BillingForm() {
       return
     }
 
+    if (paymentStatus === 'advance') {
+      const advAmt = parseFloat(advanceAmount)
+      if (isNaN(advAmt) || advAmt <= 0) {
+        toast.error('Please enter a valid advance amount.')
+        return
+      }
+      if (advAmt >= totals.total) {
+        toast.error('Advance amount cannot be greater than or equal to the total amount.')
+        return
+      }
+    }
+
     startTransition(async () => {
       try {
         const payload = {
@@ -277,19 +361,24 @@ export default function BillingForm() {
           items: billItems.map((item) => ({
             ...item
           })),
-          paymentStatus
+          paymentStatus,
+          advanceAmount: paymentStatus === 'advance' ? parseFloat(advanceAmount) : undefined,
+          discount: discount ? parseFloat(discount) : 0,
+          paymentMethod: paymentStatus === 'paid' || paymentStatus === 'advance' ? paymentMethod : undefined
         }
 
-        const res = await createBill(payload)
+        const res = isEditMode && editBillId
+          ? await updateBill(editBillId, payload)
+          : await createBill(payload)
 
         if (res.error) {
           toast.error(res.error)
         } else {
-          toast.success('Invoice created successfully!')
+          toast.success(isEditMode ? 'Invoice updated successfully!' : 'Invoice created successfully!')
           router.push('/dashboard/bills')
         }
       } catch (error: unknown) {
-        toast.error(error instanceof Error ? error.message : 'Failed to create bill.')
+        toast.error(error instanceof Error ? error.message : 'Failed to save bill.')
       }
     })
   }
@@ -298,7 +387,7 @@ export default function BillingForm() {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Left panel: Customer details */}
       <div className="lg:col-span-1 space-y-6 order-2 lg:order-1">
-        <Card className="border-zinc-200 bg-white shadow-sm">
+        <Card className="border-zinc-200 bg-white shadow-sm overflow-visible z-10">
           <CardHeader className="border-b border-zinc-200 pb-4">
             <CardTitle className="text-lg font-semibold text-zinc-900 flex items-center justify-between">
               <span>Customer Details</span>
@@ -327,7 +416,7 @@ export default function BillingForm() {
 
                   {/* Customer Results Dropdown */}
                   {showCustomerSearch && customerResults.length > 0 && (
-                    <div className="absolute z-20 w-full mt-1 border border-zinc-200 bg-white rounded-md shadow-lg max-h-60 overflow-y-auto">
+                    <div className="absolute z-50 w-full mt-1 border border-zinc-200 bg-white rounded-md shadow-lg max-h-60 overflow-y-auto">
                       {customerResults.map((cust) => (
                         <div
                           key={cust.id}
@@ -342,7 +431,7 @@ export default function BillingForm() {
                   )}
 
                   {showCustomerSearch && customerSearch.trim().length > 0 && customerResults.length === 0 && (
-                    <div className="absolute z-20 w-full mt-1 p-3 border border-zinc-200 bg-white rounded-md text-zinc-500 text-xs text-center space-y-2">
+                    <div className="absolute z-50 w-full mt-1 p-3 border border-zinc-200 bg-white rounded-md text-zinc-500 text-xs text-center space-y-2">
                       <div>No customer found matching "{customerSearch}"</div>
                       <Button
                         type="button"
@@ -386,47 +475,62 @@ export default function BillingForm() {
                   <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-200">Auto-save</Badge>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="cust-name" className="text-zinc-350 text-xs">Customer Name *</Label>
-                  <Input
-                    id="cust-name"
-                    placeholder="Enter full name"
-                    value={newCustomer.name}
-                    onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
-                    className="border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-indigo-600"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="cust-phone" className="text-zinc-350 text-xs">Phone Number *</Label>
+                  <Label htmlFor="cust-phone" className="text-zinc-700 text-xs font-semibold">Phone Number *</Label>
                   <Input
                     id="cust-phone"
                     placeholder="Enter mobile number"
                     value={newCustomer.phone}
                     onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
-                    className="border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-indigo-600"
+                    className="border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-indigo-600 h-11 text-base font-medium"
                     required
+                    autoFocus
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="cust-email" className="text-zinc-355 text-xs">Email (Optional)</Label>
+                  <Label htmlFor="cust-name" className="text-zinc-700 text-xs font-semibold">Customer Name *</Label>
                   <Input
-                    id="cust-email"
-                    type="email"
-                    placeholder="name@email.com"
-                    value={newCustomer.email}
-                    onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
-                    className="border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-indigo-600"
+                    id="cust-name"
+                    placeholder="Enter full name"
+                    value={newCustomer.name}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
+                    className="border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-indigo-600 h-11 text-base font-medium"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="cust-addr" className="text-zinc-355 text-xs">Address (Optional)</Label>
-                  <Input
-                    id="cust-addr"
-                    placeholder="Enter address"
-                    value={newCustomer.address}
-                    onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
-                    className="border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-indigo-600"
-                  />
-                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowOptionalCustomerFields(!showOptionalCustomerFields)}
+                  className="w-full text-zinc-500 hover:text-zinc-800 gap-1 text-xs"
+                >
+                  {showOptionalCustomerFields ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  Add Email & Address (Optional)
+                </Button>
+                {showOptionalCustomerFields && (
+                  <div className="space-y-3 pt-1 border-t border-zinc-100">
+                    <div className="space-y-2">
+                      <Label htmlFor="cust-email" className="text-zinc-400 text-xs">Email (Optional)</Label>
+                      <Input
+                        id="cust-email"
+                        type="email"
+                        placeholder="name@email.com"
+                        value={newCustomer.email}
+                        onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
+                        className="border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-indigo-600"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cust-addr" className="text-zinc-400 text-xs">Address (Optional)</Label>
+                      <Input
+                        id="cust-addr"
+                        placeholder="Enter address"
+                        value={newCustomer.address}
+                        onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
+                        className="border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-indigo-600"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
@@ -437,18 +541,92 @@ export default function BillingForm() {
           <CardContent className="pt-6 space-y-4">
             <div className="space-y-2">
               <Label className="text-zinc-700 text-xs">Payment Status</Label>
-              <Select value={paymentStatus} onValueChange={(val) => val && setPaymentStatus(val as 'paid' | 'unpaid')}>
+              <Select value={paymentStatus} onValueChange={(val) => val && setPaymentStatus(val as 'paid' | 'unpaid' | 'advance')}>
                 <SelectTrigger className="border-zinc-200 bg-white text-zinc-900 focus:ring-indigo-500">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-white border-zinc-200 text-zinc-900">
                   <SelectItem value="paid">Paid</SelectItem>
                   <SelectItem value="unpaid">Unpaid</SelectItem>
+                  <SelectItem value="advance">Advance</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
+            {(paymentStatus === 'paid' || paymentStatus === 'advance') && (
+              <div className="space-y-2">
+                <Label className="text-zinc-700 text-xs">Payment Method</Label>
+                <Select value={paymentMethod} onValueChange={(val) => val && setPaymentMethod(val as 'upi' | 'bank' | 'cash' | 'card')}>
+                  <SelectTrigger className="border-zinc-200 bg-white text-zinc-900 focus:ring-indigo-500">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-zinc-200 text-zinc-900">
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="upi">UPI</SelectItem>
+                    <SelectItem value="card">Card</SelectItem>
+                    <SelectItem value="bank">Bank Transfer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {paymentStatus === 'advance' && (
+              <div className="space-y-2">
+                <Label htmlFor="advance-amount" className="text-zinc-700 text-xs font-semibold">Advance Amount</Label>
+                <Input
+                  id="advance-amount"
+                  type="number"
+                  step="0.01"
+                  placeholder="Enter advance amount"
+                  value={advanceAmount}
+                  onChange={(e) => setAdvanceAmount(e.target.value)}
+                  className="border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-indigo-600"
+                />
+                {advanceAmount && !isNaN(parseFloat(advanceAmount)) && parseFloat(advanceAmount) < totals.total && (
+                  <div className="flex justify-between text-xs text-zinc-500 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                    <span>Remaining Due:</span>
+                    <span className="font-semibold text-amber-700">{formatINR(totals.total - parseFloat(advanceAmount))}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="discount-amount" className="text-zinc-700 text-xs font-semibold">Flat Discount (Optional)</Label>
+              <Input
+                id="discount-amount"
+                type="number"
+                step="0.01"
+                placeholder="Enter flat discount amount"
+                value={discount}
+                onChange={(e) => setDiscount(e.target.value)}
+                className="border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-indigo-600"
+              />
+            </div>
+
             <div className="border-t border-zinc-200 pt-4 space-y-2">
+              <div className="flex justify-between text-sm text-zinc-600">
+                <span>Subtotal:</span>
+                <span>{formatINR(totals.subtotal)}</span>
+              </div>
+              {totals.discount > 0 && (
+                <div className="flex justify-between text-sm text-rose-600">
+                  <span>Discount:</span>
+                  <span>- {formatINR(totals.discount)}</span>
+                </div>
+              )}
+              {paymentStatus === 'advance' && advanceAmount && !isNaN(parseFloat(advanceAmount)) && parseFloat(advanceAmount) < totals.total && (
+                <div className="flex justify-between text-sm text-zinc-600">
+                  <span>Advance Paid:</span>
+                  <span>{formatINR(parseFloat(advanceAmount))}</span>
+                </div>
+              )}
+              {paymentStatus === 'advance' && advanceAmount && !isNaN(parseFloat(advanceAmount)) && parseFloat(advanceAmount) < totals.total && (
+                <div className="flex justify-between text-sm font-semibold text-amber-700">
+                  <span>Due Amount:</span>
+                  <span>{formatINR(totals.total - parseFloat(advanceAmount))}</span>
+                </div>
+              )}
               <div className="flex justify-between text-base font-bold text-zinc-900 pt-2 border-t border-zinc-200/50">
                 <span>Total Amount</span>
                 <span>{formatINR(totals.total)}</span>
@@ -464,11 +642,11 @@ export default function BillingForm() {
               {isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Generating Invoice...
+                  {isEditMode ? 'Updating Invoice...' : 'Generating Invoice...'}
                 </>
               ) : (
                 <>
-                  Generate Bill & Print
+                  {isEditMode ? 'Update Bill' : 'Generate Bill & Print'}
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}
@@ -479,7 +657,7 @@ export default function BillingForm() {
 
       {/* Right panel: Search and Items table */}
       <div className="lg:col-span-2 space-y-6 order-1 lg:order-2">
-        <Card className="border-zinc-200 bg-white shadow-sm">
+        <Card className="border-zinc-200 bg-white shadow-sm overflow-visible z-10">
           <CardHeader className="border-b border-zinc-200 pb-4">
             <CardTitle className="text-lg font-semibold text-zinc-900 flex items-center justify-between">
               <span>Invoice Items</span>
@@ -610,7 +788,7 @@ export default function BillingForm() {
 
               {/* Product Results Dropdown */}
               {showProductSearch && productResults.length > 0 && (
-                <div className="absolute z-20 w-full mt-1 border border-zinc-200 bg-white rounded-md shadow-lg max-h-60 overflow-y-auto">
+                <div className="absolute z-50 w-full mt-1 border border-zinc-200 bg-white rounded-md shadow-lg max-h-60 overflow-y-auto">
                   {productResults.map((product) => (
                     <div
                       key={product.id}
@@ -630,7 +808,7 @@ export default function BillingForm() {
               )}
 
               {showProductSearch && productSearch.trim().length > 0 && productResults.length === 0 && (
-                <div className="absolute z-20 w-full mt-1 p-4 border border-zinc-200 bg-white rounded-md text-zinc-500 text-xs text-center flex flex-col items-center gap-2">
+                <div className="absolute z-50 w-full mt-1 p-4 border border-zinc-200 bg-white rounded-md text-zinc-500 text-xs text-center flex flex-col items-center gap-2">
                   <span>No product found matching "{productSearch}"</span>
                   <Button
                     type="button"

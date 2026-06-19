@@ -2,19 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { PlusCircle, FileText, Package, Users, Settings } from 'lucide-react'
+import { PlusCircle, FileText, Package, Users, Settings, BarChart3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export default function BottomNav({ role }: { role: string }) {
   const pathname = usePathname()
 
-  const links = [
-    {
-      name: 'Create',
-      href: '/dashboard',
-      icon: PlusCircle,
-      exact: true
-    },
+  const links: { name: string; href: string; icon: typeof FileText; exact?: boolean }[] = [
     {
       name: 'History',
       href: '/dashboard/bills',
@@ -32,7 +26,23 @@ export default function BottomNav({ role }: { role: string }) {
     }
   ]
 
+  // Staff can create invoices
+  if (role !== 'admin') {
+    links.unshift({
+      name: 'Create',
+      href: '/dashboard',
+      icon: PlusCircle,
+      exact: true
+    })
+  }
+
+  // Admin gets analytics and settings
   if (role === 'admin') {
+    links.push({
+      name: 'Analytics',
+      href: '/dashboard/analytics',
+      icon: BarChart3
+    })
     links.push({
       name: 'Settings',
       href: '/dashboard/settings',

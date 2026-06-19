@@ -19,10 +19,15 @@ const BillingForm = dynamic(() => import('./billing-form'), {
 })
 
 export default async function DashboardPage() {
-  const { user, branchId } = await getCurrentUserAndBranch()
+  const { user, branchId, role } = await getCurrentUserAndBranch()
 
   if (!user || !branchId) {
     redirect('/login')
+  }
+
+  // Admins go to analytics, staff go to create invoice
+  if (role === 'admin') {
+    redirect('/dashboard/analytics')
   }
 
   return (

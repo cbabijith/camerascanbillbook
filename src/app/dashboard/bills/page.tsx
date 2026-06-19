@@ -20,7 +20,7 @@ export default async function BillsPage() {
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Invoice History</h1>
         <p className="text-sm text-zinc-500">View past invoices, print receipts, and share them on WhatsApp.</p>
       </div>
-      <BillsList initialBills={bills || []} activeBranch={activeBranch} />
+      <BillsList initialBills={bills || []} activeBranch={activeBranch} userRole={user?.role} />
     </div>
   )
 }
