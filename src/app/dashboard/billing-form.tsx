@@ -669,25 +669,15 @@ export default function BillingForm() {
                     billItems.map((item, index) => (
                       <TableRow key={index} className="border-zinc-200 hover:bg-white/10">
                         <TableCell>
-                          <Input
-                            value={item.name}
-                            onChange={(e) => handleEditItem(index, 'name', e.target.value)}
-                            className="h-8 border-transparent hover:border-zinc-200 focus:border-indigo-400 bg-transparent text-sm font-semibold text-zinc-800 px-1.5"
-                          />
-                          {item.brand && <div className="text-[10px] text-zinc-500 px-1.5">{item.brand}</div>}
+                          <div className="font-semibold text-zinc-800">{item.name}</div>
+                          {item.brand && <div className="text-[10px] text-zinc-500">{item.brand}</div>}
                           {item.productId === 'new' && (
-                            <Badge className="mt-1 ml-1.5 bg-emerald-500/10 text-emerald-600 border border-emerald-200 text-[9px] px-1 py-0 h-4">
+                            <Badge className="mt-1 bg-emerald-500/10 text-emerald-600 border border-emerald-200 text-[9px] px-1 py-0 h-4">
                               New Inline
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell>
-                          <Input
-                            value={item.sku}
-                            onChange={(e) => handleEditItem(index, 'sku', e.target.value)}
-                            className="h-8 border-transparent hover:border-zinc-200 focus:border-indigo-400 bg-transparent font-mono text-xs text-zinc-500 px-1.5"
-                          />
-                        </TableCell>
+                        <TableCell className="font-mono text-xs text-zinc-500">{item.sku}</TableCell>
                         <TableCell>
                           <Input
                             type="number"
@@ -758,14 +748,10 @@ export default function BillingForm() {
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
-                          <Input
-                            value={item.name}
-                            onChange={(e) => handleEditItem(index, 'name', e.target.value)}
-                            className="h-8 border-transparent hover:border-zinc-200 focus:border-indigo-400 bg-transparent text-sm font-semibold text-zinc-800 px-1.5"
-                          />
-                          {item.brand && <div className="text-[10px] text-zinc-500 px-1.5 mt-0.5">{item.brand}</div>}
+                          <div className="font-semibold text-zinc-800 text-sm">{item.name}</div>
+                          {item.brand && <div className="text-[10px] text-zinc-500 mt-0.5">{item.brand}</div>}
                           {item.productId === 'new' && (
-                            <Badge className="mt-1 ml-1.5 bg-emerald-500/10 text-emerald-600 border border-emerald-200 text-[9px] px-1 py-0 h-4">
+                            <Badge className="mt-1 bg-emerald-500/10 text-emerald-600 border border-emerald-200 text-[9px] px-1 py-0 h-4">
                               New Inline
                             </Badge>
                           )}
@@ -784,11 +770,7 @@ export default function BillingForm() {
                       <div className="grid grid-cols-3 gap-2 text-xs border-t border-zinc-100 pt-2 items-center">
                         <div>
                           <span className="text-zinc-400 block text-[9px] uppercase font-semibold">Serial No.</span>
-                          <Input
-                            value={item.sku}
-                            onChange={(e) => handleEditItem(index, 'sku', e.target.value)}
-                            className="h-7 mt-0.5 border-transparent hover:border-zinc-200 focus:border-indigo-400 bg-transparent font-mono text-[10px] text-zinc-650 px-1"
-                          />
+                          <span className="font-mono text-zinc-650 block text-[10px] mt-0.5">{item.sku}</span>
                         </div>
                         <div>
                           <span className="text-zinc-400 block text-[9px] uppercase font-semibold">Price</span>
