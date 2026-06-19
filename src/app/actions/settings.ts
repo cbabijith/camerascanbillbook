@@ -285,7 +285,13 @@ export async function createStaff(formData: FormData) {
     return { error: 'All fields are required.' }
   }
 
-  const adminClient = await createAdminClient()
+  let adminClient
+  try {
+    adminClient = await createAdminClient()
+  } catch {
+    return { error: 'Server is missing SUPABASE_SERVICE_ROLE_KEY. Add it in Vercel environment variables to manage staff.' }
+  }
+
   const { data, error } = await adminClient.auth.admin.createUser({
     email,
     password,
@@ -315,7 +321,13 @@ export async function deleteStaff(id: string) {
   const { user } = await getCurrentUserAndBranch()
   if (!user || user.role !== 'admin') return { error: 'Unauthorized.' }
 
-  const adminClient = await createAdminClient()
+  let adminClient
+  try {
+    adminClient = await createAdminClient()
+  } catch {
+    return { error: 'Server is missing SUPABASE_SERVICE_ROLE_KEY. Add it in Vercel environment variables to manage staff.' }
+  }
+
   // Delete from Auth (which cascades to profile)
   const { error } = await adminClient.auth.admin.deleteUser(id)
 

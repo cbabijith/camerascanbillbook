@@ -51,7 +51,12 @@ export async function setupAdmin(formData: FormData) {
   }
 
   // 2. Use admin client to create user and bypass email confirmation
-  const adminClient = await createAdminClient()
+  let adminClient
+  try {
+    adminClient = await createAdminClient()
+  } catch {
+    return { error: 'Server is missing SUPABASE_SERVICE_ROLE_KEY. Add it in your environment variables.' }
+  }
   const { data: user, error: userError } = await adminClient.auth.admin.createUser({
     email,
     password,

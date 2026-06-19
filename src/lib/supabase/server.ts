@@ -30,6 +30,9 @@ export async function createClient() {
 
 // Special Admin client that uses Service Role Key to bypass RLS and create profiles/auth users directly
 export async function createAdminClient() {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set')
+  }
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
