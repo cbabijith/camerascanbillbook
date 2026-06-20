@@ -92,47 +92,54 @@ class _AnalyticsViewState extends ConsumerState<AnalyticsView> with TickerProvid
           // Range selectors
           _buildRangeSelector(context),
           
-          // Modern Pill Tab selector
-          TabBar(
-            controller: _tabController,
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            dividerColor: Colors.transparent,
-            splashFactory: NoSplash.splashFactory,
-            overlayColor: WidgetStateProperty.all(Colors.transparent),
-            indicator: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withOpacity(0.15),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
+          // Modern Pill Tab selector with track background
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: AppColors.border.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: false,
+              dividerColor: Colors.transparent,
+              splashFactory: NoSplash.splashFactory,
+              overlayColor: WidgetStateProperty.all(Colors.transparent),
+              indicator: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.15),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              indicatorSize: TabBarIndicatorSize.tab,
+              labelColor: Colors.white,
+              unselectedLabelColor: AppColors.textSecondary,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
+              padding: EdgeInsets.zero,
+              tabs: [
+                const Tab(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('All Branches'),
+                  ),
+                ),
+                ...branches.map(
+                  (b) => Tab(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(b.branchName),
+                    ),
+                  ),
                 ),
               ],
             ),
-            indicatorSize: TabBarIndicatorSize.tab,
-            labelColor: Colors.white,
-            unselectedLabelColor: AppColors.textSecondary,
-            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            tabs: [
-              const Tab(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('All Branches'),
-                ),
-              ),
-              ...branches.map(
-                (b) => Tab(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text(b.branchName),
-                  ),
-                ),
-              ),
-            ],
           ),
           
           Expanded(
