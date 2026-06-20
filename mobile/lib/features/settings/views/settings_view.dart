@@ -34,6 +34,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> with TickerProvider
   }
 
   void _showAddOrEditBranchDialog([Branch? branch]) {
+    final parentContext = context;
     final isEdit = branch != null;
     final nameCtrl = TextEditingController(text: isEdit ? branch.name : '');
     final addrCtrl = TextEditingController(text: isEdit ? branch.address ?? '' : '');
@@ -43,7 +44,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> with TickerProvider
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: Text(isEdit ? 'Edit Branch' : 'Add Shop Branch'),
         content: Form(
@@ -87,7 +88,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> with TickerProvider
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
@@ -118,15 +119,15 @@ class _SettingsViewState extends ConsumerState<SettingsView> with TickerProvider
                     );
               }
 
-              if (mounted) {
-                Navigator.of(context).pop();
+              if (parentContext.mounted) {
+                Navigator.of(dialogContext).pop();
                 if (!success) {
                   final err = ref.read(branchControllerProvider).errorMessage ?? 'An error occurred';
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(parentContext).showSnackBar(
                     SnackBar(content: Text(err), backgroundColor: AppColors.danger),
                   );
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(parentContext).showSnackBar(
                     SnackBar(
                       content: Text(isEdit ? 'Branch updated successfully' : 'Branch created successfully'),
                       backgroundColor: AppColors.success,
@@ -190,6 +191,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> with TickerProvider
   }
 
   void _showAddStaffDialog() {
+    final parentContext = context;
     final nameCtrl = TextEditingController();
     final usernameCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
@@ -200,10 +202,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> with TickerProvider
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         final branches = ref.watch(branchControllerProvider).branches;
         return StatefulBuilder(
-          builder: (context, setState) {
+          builder: (stateContext, setState) {
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               title: const Text('Create Staff Account'),
@@ -248,7 +250,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> with TickerProvider
                           labelText: 'Assigned Branch *',
                           contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         ),
-                        value: selectedBranchId,
+                        initialValue: selectedBranchId,
                         validator: (val) => val == null ? 'Required' : null,
                         items: branches.map((b) {
                           return DropdownMenuItem<String>(
@@ -264,7 +266,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> with TickerProvider
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () => Navigator.of(dialogContext).pop(),
                   child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
                 ),
                 ElevatedButton(
@@ -278,11 +280,13 @@ class _SettingsViewState extends ConsumerState<SettingsView> with TickerProvider
                     final password = passCtrl.text;
                     final branchId = selectedBranchId!;
 
-                    Navigator.of(context).pop();
+                    Navigator.of(dialogContext).pop();
 
-                    ScaffoldMessenger.of(this.context).showSnackBar(
-                      const SnackBar(content: Text('Creating staff account...'), duration: Duration(seconds: 1)),
-                    );
+                    if (parentContext.mounted) {
+                      ScaffoldMessenger.of(parentContext).showSnackBar(
+                        const SnackBar(content: Text('Creating staff account...'), duration: Duration(seconds: 1)),
+                      );
+                    }
 
                     final success = await ref.read(settingsControllerProvider.notifier).createStaff(
                           email: email,
@@ -292,14 +296,14 @@ class _SettingsViewState extends ConsumerState<SettingsView> with TickerProvider
                           branchId: branchId,
                         );
 
-                    if (this.mounted) {
+                    if (parentContext.mounted) {
                       if (!success) {
                         final err = ref.read(settingsControllerProvider).errorMessage ?? 'Failed to create staff account';
-                        ScaffoldMessenger.of(this.context).showSnackBar(
+                        ScaffoldMessenger.of(parentContext).showSnackBar(
                           SnackBar(content: Text(err), backgroundColor: AppColors.danger),
                         );
                       } else {
-                        ScaffoldMessenger.of(this.context).showSnackBar(
+                        ScaffoldMessenger.of(parentContext).showSnackBar(
                           const SnackBar(content: Text('Staff account created successfully'), backgroundColor: AppColors.success),
                         );
                       }
@@ -358,28 +362,75 @@ class _SettingsViewState extends ConsumerState<SettingsView> with TickerProvider
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: Container(
-          color: Colors.white,
-          child: TabBar(
-            controller: _tabController,
-            labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textSecondary,
-            indicatorColor: AppColors.primary,
-            tabs: const [
-              Tab(icon: Icon(Icons.store), text: 'Branches'),
-              Tab(icon: Icon(Icons.people), text: 'Staff Management'),
-            ],
-          ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Modern Pill Tab selector with track background
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: AppColors.border.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: TabBar(
+                controller: _tabController,
+                isScrollable: false,
+                dividerColor: Colors.transparent,
+                splashFactory: NoSplash.splashFactory,
+                overlayColor: WidgetStateProperty.all(Colors.transparent),
+                indicator: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.15),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                indicatorSize: TabBarIndicatorSize.tab,
+                labelColor: Colors.white,
+                unselectedLabelColor: AppColors.textSecondary,
+                labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
+                padding: EdgeInsets.zero,
+                tabs: const [
+                  Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.store, size: 16),
+                        SizedBox(width: 6),
+                        Text('Branches'),
+                      ],
+                    ),
+                  ),
+                  Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.people, size: 16),
+                        SizedBox(width: 6),
+                        Text('Staff Accounts'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildBranchesTab(branchState),
+                  _buildStaffTab(settingsState),
+                ],
+              ),
+            ),
+          ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildBranchesTab(branchState),
-          _buildStaffTab(settingsState),
-        ],
       ),
     );
   }
@@ -392,15 +443,21 @@ class _SettingsViewState extends ConsumerState<SettingsView> with TickerProvider
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Shop Branches', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
               ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                ),
                 icon: const Icon(Icons.add, color: Colors.white, size: 18),
-                label: const Text('Add Branch', style: TextStyle(color: Colors.white)),
+                label: const Text('Add Branch', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 onPressed: () => _showAddOrEditBranchDialog(),
               ),
             ],
@@ -414,29 +471,98 @@ class _SettingsViewState extends ConsumerState<SettingsView> with TickerProvider
                   itemCount: branchState.branches.length,
                   itemBuilder: (context, index) {
                     final branch = branchState.branches[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        title: Text(branch.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Column(
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: ShadCard(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (branch.address != null) Text('Address: ${branch.address}'),
-                            if (branch.phone != null) Text('Phone: ${branch.phone}'),
-                            if (branch.gstin != null) Text('GSTIN: ${branch.gstin}'),
-                          ],
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit, color: AppColors.primary),
-                              onPressed: () => _showAddOrEditBranchDialog(branch),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryLight,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.store, color: AppColors.primary, size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    branch.name,
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.edit, color: AppColors.textSecondary, size: 20),
+                                  onPressed: () => _showAddOrEditBranchDialog(branch),
+                                  tooltip: 'Edit Branch',
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
+                                  onPressed: () => _deleteBranch(branch),
+                                  tooltip: 'Delete Branch',
+                                ),
+                              ],
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: AppColors.danger),
-                              onPressed: () => _deleteBranch(branch),
-                            ),
+                            if (branch.address != null || branch.phone != null || branch.gstin != null) ...[
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                child: Divider(color: AppColors.border, height: 1),
+                              ),
+                              if (branch.address != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Icon(Icons.location_on_outlined, color: AppColors.textSecondary, size: 16),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          branch.address!,
+                                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (branch.phone != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.phone_outlined, color: AppColors.textSecondary, size: 16),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        branch.phone!,
+                                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (branch.gstin != null)
+                                Row(
+                                  children: [
+                                    const Icon(Icons.receipt_outlined, color: AppColors.textSecondary, size: 16),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                      'GSTIN: ',
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+                                    ),
+                                    ShadBadge(
+                                      label: branch.gstin!,
+                                      type: BadgeType.info,
+                                    ),
+                                  ],
+                                ),
+                            ],
                           ],
                         ),
                       ),
@@ -456,15 +582,21 @@ class _SettingsViewState extends ConsumerState<SettingsView> with TickerProvider
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Staff Accounts', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
               ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                ),
                 icon: const Icon(Icons.add, color: Colors.white, size: 18),
-                label: const Text('Add Staff', style: TextStyle(color: Colors.white)),
+                label: const Text('Add Staff', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 onPressed: _showAddStaffDialog,
               ),
             ],
@@ -478,20 +610,72 @@ class _SettingsViewState extends ConsumerState<SettingsView> with TickerProvider
                   itemCount: settingsState.staff.length,
                   itemBuilder: (context, index) {
                     final member = settingsState.staff[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        title: Text(member.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    final initials = member.name.trim().isNotEmpty
+                        ? member.name.trim().split(' ').map((e) => e[0]).take(2).join().toUpperCase()
+                        : 'S';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: ShadCard(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
                           children: [
-                            Text('Username: @${member.username}'),
-                            Text('Assigned Branch: ${member.branchName ?? "Loading..."}'),
+                            CircleAvatar(
+                              radius: 20,
+                              backgroundColor: AppColors.primaryLight,
+                              child: Text(
+                                initials,
+                                style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    member.name,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '@${member.username}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.store, size: 12, color: AppColors.textMuted),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        member.branchName ?? 'Loading...',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w500,
+                                          color: AppColors.textMuted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
+                              onPressed: () => _deleteStaff(member),
+                              tooltip: 'Delete Staff Account',
+                            ),
                           ],
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: AppColors.danger),
-                          onPressed: () => _deleteStaff(member),
                         ),
                       ),
                     );
