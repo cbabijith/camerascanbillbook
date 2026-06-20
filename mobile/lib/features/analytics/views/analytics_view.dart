@@ -92,16 +92,46 @@ class _AnalyticsViewState extends ConsumerState<AnalyticsView> with TickerProvid
           // Range selectors
           _buildRangeSelector(context),
           
-          // Tab selector
+          // Modern Pill Tab selector
           TabBar(
             controller: _tabController,
             isScrollable: true,
-            labelColor: AppColors.primary,
+            tabAlignment: TabAlignment.start,
+            dividerColor: Colors.transparent,
+            splashFactory: NoSplash.splashFactory,
+            overlayColor: WidgetStateProperty.all(Colors.transparent),
+            indicator: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withOpacity(0.15),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            indicatorSize: TabBarIndicatorSize.tab,
+            labelColor: Colors.white,
             unselectedLabelColor: AppColors.textSecondary,
-            indicatorColor: AppColors.primary,
+            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             tabs: [
-              const Tab(text: 'All Branches'),
-              ...branches.map((b) => Tab(text: b.branchName)),
+              const Tab(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: Text('All Branches'),
+                ),
+              ),
+              ...branches.map(
+                (b) => Tab(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(b.branchName),
+                  ),
+                ),
+              ),
             ],
           ),
           
