@@ -296,7 +296,7 @@ class _AnalyticsViewState extends ConsumerState<AnalyticsView> with TickerProvid
         const SizedBox(height: 16),
         
         // Payment methods + Staff leaderboard
-        _buildProgressAndLeaderboardRow(paymentMethods, staff),
+        _buildProgressAndLeaderboardRow(paymentMethods, staff, showBranch: isAll),
         const SizedBox(height: 16),
         
         // Overdue list
@@ -347,7 +347,11 @@ class _AnalyticsViewState extends ConsumerState<AnalyticsView> with TickerProvid
     );
   }
 
-  Widget _buildProgressAndLeaderboardRow(Map<String, double> paymentMethods, List<StaffRanking> staff) {
+  Widget _buildProgressAndLeaderboardRow(
+    Map<String, double> paymentMethods,
+    List<StaffRanking> staff, {
+    required bool showBranch,
+  }) {
     final maxAmt = paymentMethods.values.fold(0.0, (m, val) => val > m ? val : m);
 
     return Column(
@@ -400,17 +404,180 @@ class _AnalyticsViewState extends ConsumerState<AnalyticsView> with TickerProvid
               if (staff.isEmpty)
                 const Text('No staff activity in this period', style: TextStyle(color: AppColors.textSecondary))
               else
-                ...staff.map((s) {
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(s.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    subtitle: Text('${s.billCount} invoices • ${s.branchName ?? ""}', style: const TextStyle(fontSize: 11)),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                ...staff.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final s = entry.value;
+
+                  Color rowBgColor = Colors.transparent;
+                  Color rowBorderColor = Colors.transparent;
+
+                  Color rankBgColor = const Color(0xFFE2E8F0); // zinc-200 / AppColors.border
+                  Color rankTextColor = const Color(0xFF64748B); // zinc-600 / AppColors.textSecondary
+
+                  if (idx == 0) {
+                    rowBgColor = const Color(0xFFFEF3C7); // amber-50
+                    rowBorderColor = const Color(0xFFFDE68A); // amber-200
+                    rankBgColor = const Color(0xFFF59E0B); // amber-500
+                    rankTextColor = Colors.white;
+                  } else if (idx == 1) {
+                    rowBgColor = const Color(0xFFF1F5F9); // slate/zinc-50 (Slate 100/50 mix)
+                    rowBorderColor = const Color(0xFFE2E8F0); // Slate 200
+                    rankBgColor = const Color(0xFF94A3B8); // Slate 400
+                    rankTextColor = Colors.white;
+                  } else if (idx == 2) {
+                    rowBgColor = const Color(0xFFFFF7ED); // orange-50
+                    rowBorderColor = const Color(0xFFFED7AA); // orange-200
+                    rankBgColor = const Color(0xFFEA580C); // orange-600
+                    rankTextColor = Colors.white;
+                  }
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: rowBgColor,
+                      border: Border.all(color: rowBorderColor),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
                       children: [
-                        Text(_formatINR(s.totalSales), style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.success, fontSize: 13)),
-                        Text('Collected: ${_formatINR(s.collectedAmount)}', style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                        // Rank circle
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: rankBgColor,
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '${idx + 1}',
+                            style: TextStyle(
+                              color: rankTextColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Staff Name
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                s.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: AppColors.textPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (showBranch && s.branchName != null)
+                                Text(
+                                  s.branchName!,
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        // Invoices column
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${s.billCount}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const Text(
+                              'invoices',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        // Sales column
+                        Container(
+                          padding: const EdgeInsets.only(left: 6),
+                          margin: const EdgeInsets.only(left: 6),
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              left: BorderSide(
+                                color: AppColors.border,
+                                width: 1,
+                              ),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _formatINR(s.totalSales),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: Color(0xFF059669), // text-emerald-600
+                                ),
+                              ),
+                              const Text(
+                                'sales',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Collected column
+                        Container(
+                          padding: const EdgeInsets.only(left: 6),
+                          margin: const EdgeInsets.only(left: 6),
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              left: BorderSide(
+                                color: AppColors.border,
+                                width: 1,
+                              ),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _formatINR(s.collectedAmount),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: Color(0xFF0D9488), // text-teal-600
+                                ),
+                              ),
+                              const Text(
+                                'collected',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   );
