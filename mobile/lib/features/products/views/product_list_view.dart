@@ -43,8 +43,8 @@ class _ProductListViewState extends ConsumerState<ProductListView> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text(isEdit ? 'Edit Product' : 'Add Product'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(isEdit ? 'Edit Product' : 'Add Product', style: const TextStyle(fontWeight: FontWeight.bold)),
         content: Form(
           key: formKey,
           child: SingleChildScrollView(
@@ -108,10 +108,13 @@ class _ProductListViewState extends ConsumerState<ProductListView> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
 
@@ -151,10 +154,17 @@ class _ProductListViewState extends ConsumerState<ProductListView> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text(err), backgroundColor: AppColors.danger),
                   );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(isEdit ? 'Product details updated' : 'Product added to catalogue'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
                 }
               }
             },
-            child: Text(isEdit ? 'Save Changes' : 'Add Product', style: const TextStyle(color: Colors.white)),
+            child: Text(isEdit ? 'Save' : 'Add Product', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -174,7 +184,7 @@ class _ProductListViewState extends ConsumerState<ProductListView> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete', style: TextStyle(color: AppColors.danger)),
+            child: const Text('Delete', style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -205,13 +215,23 @@ class _ProductListViewState extends ConsumerState<ProductListView> {
       backgroundColor: AppColors.background,
       body: Column(
         children: [
-          Padding(
+          Container(
+            color: Colors.white,
             padding: const EdgeInsets.all(16.0),
             child: TextField(
               controller: _searchController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Search by name, SKU, brand...',
-                prefixIcon: Icon(Icons.search),
+                prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary, size: 20),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
               ),
               onChanged: (val) => setState(() => _searchQuery = val),
             ),
@@ -220,36 +240,121 @@ class _ProductListViewState extends ConsumerState<ProductListView> {
             child: state.isLoading && state.products.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : filteredList.isEmpty
-                    ? const Center(child: Text('No products found', style: TextStyle(color: AppColors.textSecondary)))
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.shopping_bag_outlined, size: 64, color: AppColors.textMuted.withOpacity(0.5)),
+                            const SizedBox(height: 12),
+                            Text('No products found', style: TextStyle(color: AppColors.textSecondary, fontSize: 15, fontWeight: FontWeight.w500)),
+                          ],
+                        ),
+                      )
                     : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.all(16),
                         itemCount: filteredList.length,
                         itemBuilder: (context, index) {
                           final product = filteredList[index];
+
                           return Card(
                             margin: const EdgeInsets.only(bottom: 12),
-                            child: ListTile(
-                              title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: const BorderSide(color: AppColors.border, width: 1),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14.0),
+                              child: Row(
                                 children: [
-                                  Text('SN/SKU: ${product.sku}'),
-                                  if (product.brand != null) Text('Brand: ${product.brand}'),
-                                  if (product.category != null) Text('Category: ${product.category}'),
-                                  Text('Price: ₹${product.sellingPrice.toStringAsFixed(2)}'),
-                                  if (product.mrp != null) Text('MRP: ₹${product.mrp!.toStringAsFixed(2)}'),
-                                ],
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, color: AppColors.primary),
-                                    onPressed: () => _showAddOrEditDialog(product),
+                                  // Product visual avatar representation
+                                  Container(
+                                    height: 52,
+                                    width: 52,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryLight,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.camera_alt_outlined,
+                                        color: AppColors.primary,
+                                        size: 24,
+                                      ),
+                                    ),
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete, color: AppColors.danger),
-                                    onPressed: () => _deleteProduct(product.id),
+                                  const SizedBox(width: 14),
+                                  // Product details
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          product.name,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.qr_code_scanner, size: 12, color: AppColors.textSecondary),
+                                            const SizedBox(width: 4),
+                                            Text('SN/SKU: ${product.sku}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        // Brand / Category Badges
+                                        Row(
+                                          children: [
+                                            if (product.brand != null) ...[
+                                              ShadBadge(label: product.brand!, type: BadgeType.info),
+                                              const SizedBox(width: 6),
+                                            ],
+                                            if (product.category != null)
+                                              ShadBadge(label: product.category!, type: BadgeType.primary),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  // Price + Actions Column
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        '₹${product.sellingPrice.toStringAsFixed(2)}',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.success),
+                                      ),
+                                      if (product.mrp != null)
+                                        Text(
+                                          'MRP: ₹${product.mrp!.toStringAsFixed(2)}',
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            color: AppColors.textMuted,
+                                            decoration: TextDecoration.lineThrough,
+                                          ),
+                                        ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.edit_outlined, color: AppColors.primary, size: 18),
+                                            onPressed: () => _showAddOrEditDialog(product),
+                                            constraints: const BoxConstraints(),
+                                            padding: const EdgeInsets.all(4),
+                                            tooltip: 'Edit Product',
+                                          ),
+                                          const SizedBox(width: 6),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
+                                            onPressed: () => _deleteProduct(product.id),
+                                            constraints: const BoxConstraints(),
+                                            padding: const EdgeInsets.all(4),
+                                            tooltip: 'Delete Product',
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -263,6 +368,7 @@ class _ProductListViewState extends ConsumerState<ProductListView> {
       floatingActionButton: FloatingActionButton(
         heroTag: 'product_fab',
         backgroundColor: AppColors.primary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         onPressed: () => _showAddOrEditDialog(),
         child: const Icon(Icons.add, color: Colors.white),
       ),
