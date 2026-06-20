@@ -375,7 +375,14 @@ class _AnalyticsViewState extends ConsumerState<AnalyticsView> with TickerProvid
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(e.key.toUpperCase(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _getPaymentMethodIcon(e.key),
+                                const SizedBox(width: 8),
+                                Text(e.key.toUpperCase(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
                             Text(_formatINR(e.value), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           ],
                         ),
@@ -683,6 +690,48 @@ class _AnalyticsViewState extends ConsumerState<AnalyticsView> with TickerProvid
         Text(label, style: const TextStyle(fontSize: 9, color: AppColors.textSecondary)),
         Text(value, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
       ],
+    );
+  }
+
+  Widget _getPaymentMethodIcon(String method) {
+    final normalized = method.toLowerCase().trim();
+    String url;
+    IconData fallbackIcon;
+    Color fallbackColor;
+
+    if (normalized == 'upi') {
+      url = 'https://upload.wikimedia.org/wikipedia/commons/e/e1/UPI-Logo.png';
+      fallbackIcon = Icons.qr_code;
+      fallbackColor = Colors.blue;
+    } else if (normalized == 'cash') {
+      url = 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/Money_flat_icon.svg/512px-Money_flat_icon.svg.png';
+      fallbackIcon = Icons.money;
+      fallbackColor = Colors.green;
+    } else if (normalized == 'card') {
+      url = 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Debit_card_flat_icon.svg/512px-Debit_card_flat_icon.svg.png';
+      fallbackIcon = Icons.credit_card;
+      fallbackColor = Colors.orange;
+    } else {
+      url = 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Bank_flat_icon.svg/512px-Bank_flat_icon.svg.png';
+      fallbackIcon = Icons.account_balance;
+      fallbackColor = Colors.grey;
+    }
+
+    return Container(
+      width: 20,
+      height: 20,
+      alignment: Alignment.center,
+      child: Image.network(
+        url,
+        width: 20,
+        height: 20,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => Icon(fallbackIcon, size: 16, color: fallbackColor),
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Icon(fallbackIcon, size: 16, color: fallbackColor);
+        },
+      ),
     );
   }
 }
