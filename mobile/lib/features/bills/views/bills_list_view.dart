@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../controllers/bill_controller.dart';
 import '../models/bill.dart';
 import '../utils/invoice_pdf_helper.dart';
+import 'bill_details_view.dart';
 import '../../branches/controllers/branch_controller.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/custom_widgets.dart';
@@ -176,6 +177,21 @@ class _BillsListViewState extends ConsumerState<BillsListView> {
       branch.name,
       gstin: branch.gstin,
       phone: branch.phone,
+      address: branch.address,
+    );
+  }
+
+  void _printPdf(Bill bill) {
+    final activeBranchId = ref.read(branchControllerProvider).activeBranchId;
+    final branches = ref.read(branchControllerProvider).branches;
+    final branch = branches.firstWhere((b) => b.id == activeBranchId);
+
+    InvoicePdfHelper.printInvoice(
+      bill,
+      branch.name,
+      gstin: branch.gstin,
+      phone: branch.phone,
+      address: branch.address,
     );
   }
 
@@ -259,7 +275,7 @@ class _BillsListViewState extends ConsumerState<BillsListView> {
                         itemCount: filtered.length,
                         itemBuilder: (context, index) {
                           final bill = filtered[index];
-                          final formattedDate = DateFormat('dd MMM yyyy, hh:mm a').format(bill.createdAt);
+                          final formattedDate = DateFormat('dd MMM yyyy, hh:mm a').format(bill.createdAt.toLocal());
 
                           BadgeType bType = BadgeType.primary;
                           Color statusColor = AppColors.primary;
@@ -282,15 +298,23 @@ class _BillsListViewState extends ConsumerState<BillsListView> {
                             ),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(16),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  border: Border(
-                                    left: BorderSide(color: statusColor, width: 4),
+                              child: InkWell(
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => BillDetailsView(bill: bill),
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      left: BorderSide(color: statusColor, width: 4),
+                                    ),
                                   ),
-                                ),
-                                padding: const EdgeInsets.all(16.0),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -365,6 +389,13 @@ class _BillsListViewState extends ConsumerState<BillsListView> {
                                         Row(
                                           children: [
                                             _buildActionBtn(
+                                              icon: Icons.print_outlined,
+                                              color: AppColors.primary,
+                                              tooltip: 'Print Receipt',
+                                              onTap: () => _printPdf(bill),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            _buildActionBtn(
                                               icon: Icons.share_outlined,
                                               color: AppColors.primary,
                                               tooltip: 'Share Invoice',
@@ -394,8 +425,9 @@ class _BillsListViewState extends ConsumerState<BillsListView> {
                                 ),
                               ),
                             ),
-                          );
-                        },
+                          ),
+                        );
+                      },
                       ),
           ),
         ],

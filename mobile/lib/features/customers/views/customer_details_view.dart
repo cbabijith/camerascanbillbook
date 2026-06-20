@@ -5,6 +5,7 @@ import '../models/customer.dart';
 import '../../bills/controllers/bill_controller.dart';
 import '../../bills/models/bill.dart';
 import '../../bills/utils/invoice_pdf_helper.dart';
+import '../../bills/views/bill_details_view.dart';
 import '../../branches/controllers/branch_controller.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/custom_widgets.dart';
@@ -237,7 +238,7 @@ class _CustomerDetailsViewState extends ConsumerState<CustomerDetailsView> {
                         itemCount: customerBills.length,
                         itemBuilder: (context, idx) {
                           final bill = customerBills[idx];
-                          final formattedDate = DateFormat('dd MMM yyyy').format(bill.createdAt);
+                          final formattedDate = DateFormat('dd MMM yyyy').format(bill.createdAt.toLocal());
 
                           BadgeType statusBadge = BadgeType.primary;
                           if (bill.paymentStatus == 'paid') {
@@ -255,6 +256,13 @@ class _CustomerDetailsViewState extends ConsumerState<CustomerDetailsView> {
                               side: const BorderSide(color: AppColors.border),
                             ),
                             child: ListTile(
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) => BillDetailsView(bill: bill),
+                                  ),
+                                );
+                              },
                               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               title: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,

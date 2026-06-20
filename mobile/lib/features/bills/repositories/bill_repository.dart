@@ -1,6 +1,7 @@
 import 'dart:math';
 import '../../../core/supabase/api_client.dart';
 import '../models/bill.dart';
+import '../models/payment_collection.dart';
 
 class BillRepository {
   final _client = supabase;
@@ -8,7 +9,7 @@ class BillRepository {
   Future<List<Bill>> getBills(String branchId) async {
     final response = await _client
         .from('bills')
-        .select()
+        .select('*, profiles:user_id(name), payment_collections(*, profiles:collected_by(name))')
         .eq('branch_id', branchId)
         .order('created_at', ascending: false);
     return (response as List).map((json) => Bill.fromJson(json)).toList();
@@ -302,5 +303,14 @@ class BillRepository {
 
   Future<void> deleteBill(String id, String branchId) async {
     await _client.from('bills').delete().eq('id', id).eq('branch_id', branchId);
+  }
+
+  Future<List<PaymentCollection>> getPaymentCollections(String billId) async {
+    final response = await _client
+        .from('payment_collections')
+        .select('*, profiles(name)')
+        .eq('bill_id', billId)
+        .order('collected_at', ascending: false);
+    return (response as List).map((json) => PaymentCollection.fromJson(json)).toList();
   }
 }

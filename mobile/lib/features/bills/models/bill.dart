@@ -1,3 +1,5 @@
+import 'payment_collection.dart';
+
 class BillItem {
   final String productId;
   final String name;
@@ -75,8 +77,10 @@ class Bill {
   final double discount;
   final DateTime createdAt;
   final String? createdBy;
+  final String? createdByName;
   final DateTime updatedAt;
   final String? updatedBy;
+  final List<PaymentCollection> paymentCollections;
 
   Bill({
     required this.id,
@@ -95,13 +99,22 @@ class Bill {
     required this.discount,
     required this.createdAt,
     this.createdBy,
+    this.createdByName,
     required this.updatedAt,
     this.updatedBy,
+    this.paymentCollections = const [],
   });
 
   factory Bill.fromJson(Map<String, dynamic> json) {
     final itemsList = (json['items'] as List<dynamic>? ?? [])
         .map((item) => BillItem.fromJson(item as Map<String, dynamic>))
+        .toList();
+
+    final profiles = json['profiles'] as Map<String, dynamic>?;
+    final createdByName = profiles != null ? profiles['name'] as String? : null;
+
+    final collectionsList = (json['payment_collections'] as List<dynamic>? ?? [])
+        .map((e) => PaymentCollection.fromJson(e as Map<String, dynamic>))
         .toList();
 
     return Bill(
@@ -121,8 +134,10 @@ class Bill {
       discount: (json['discount'] as num? ?? 0).toDouble(),
       createdAt: DateTime.parse(json['created_at'] as String),
       createdBy: json['created_by'] as String?,
+      createdByName: createdByName,
       updatedAt: DateTime.parse(json['updated_at'] as String),
       updatedBy: json['updated_by'] as String?,
+      paymentCollections: collectionsList,
     );
   }
 
@@ -144,10 +159,12 @@ class Bill {
       'discount': discount,
       'created_at': createdAt.toIso8601String(),
       'created_by': createdBy,
+      'created_by_name': createdByName,
       'updated_at': updatedAt.toIso8601String(),
       'updated_by': updatedBy,
+      'payment_collections': paymentCollections.map((e) => e.toJson()).toList(),
     };
   }
 
-  double get dueAmount => total - advanceAmount;
+  double get dueAmount => paymentStatus == 'paid' ? 0.0 : total - advanceAmount;
 }
