@@ -56,6 +56,7 @@ class ProductController extends Notifier<ProductState> {
     state = state.copyWith(isLoading: true);
     try {
       final list = await _repository.getProducts(branchId);
+      list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       state = state.copyWith(products: list, isLoading: false);
     } catch (e) {
       state = state.copyWith(errorMessage: e.toString(), isLoading: false);
@@ -106,7 +107,7 @@ class ProductController extends Notifier<ProductState> {
         userId: _currentUserId,
       );
       state = state.copyWith(
-        products: [...state.products, product]..sort((a, b) => a.name.compareTo(b.name)),
+        products: [...state.products, product]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())),
         isLoading: false,
       );
       return true;
@@ -138,7 +139,8 @@ class ProductController extends Notifier<ProductState> {
         userId: _currentUserId,
       );
       state = state.copyWith(
-        products: state.products.map((p) => p.id == id ? updated : p).toList(),
+        products: state.products.map((p) => p.id == id ? updated : p).toList()
+          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())),
         isLoading: false,
       );
       return true;

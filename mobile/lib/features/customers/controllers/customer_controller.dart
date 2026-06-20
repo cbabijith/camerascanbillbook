@@ -56,6 +56,7 @@ class CustomerController extends Notifier<CustomerState> {
     state = state.copyWith(isLoading: true);
     try {
       final list = await _repository.getCustomers(branchId);
+      list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       state = state.copyWith(customers: list, isLoading: false);
     } catch (e) {
       state = state.copyWith(errorMessage: e.toString(), isLoading: false);
@@ -102,7 +103,7 @@ class CustomerController extends Notifier<CustomerState> {
         userId: _currentUserId,
       );
       state = state.copyWith(
-        customers: [...state.customers, customer]..sort((a, b) => a.name.compareTo(b.name)),
+        customers: [...state.customers, customer]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())),
         isLoading: false,
       );
       return true;
@@ -130,7 +131,8 @@ class CustomerController extends Notifier<CustomerState> {
         userId: _currentUserId,
       );
       state = state.copyWith(
-        customers: state.customers.map((c) => c.id == id ? updated : c).toList(),
+        customers: state.customers.map((c) => c.id == id ? updated : c).toList()
+          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())),
         isLoading: false,
       );
       return true;
