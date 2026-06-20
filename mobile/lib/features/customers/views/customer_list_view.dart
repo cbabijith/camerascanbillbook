@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../controllers/customer_controller.dart';
 import '../models/customer.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/custom_widgets.dart';
+import 'customer_details_view.dart';
 
 class CustomerListView extends ConsumerStatefulWidget {
   const CustomerListView({super.key});
@@ -41,8 +43,8 @@ class _CustomerListViewState extends ConsumerState<CustomerListView> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text(isEdit ? 'Edit Customer' : 'Add Customer'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(isEdit ? 'Edit Customer' : 'Add Customer', style: const TextStyle(fontWeight: FontWeight.bold)),
         content: Form(
           key: formKey,
           child: SingleChildScrollView(
@@ -79,10 +81,13 @@ class _CustomerListViewState extends ConsumerState<CustomerListView> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
 
@@ -116,10 +121,17 @@ class _CustomerListViewState extends ConsumerState<CustomerListView> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text(err), backgroundColor: AppColors.danger),
                   );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(isEdit ? 'Customer updated' : 'Customer added'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
                 }
               }
             },
-            child: Text(isEdit ? 'Save Changes' : 'Add Customer', style: const TextStyle(color: Colors.white)),
+            child: Text(isEdit ? 'Save' : 'Add Customer', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -139,7 +151,7 @@ class _CustomerListViewState extends ConsumerState<CustomerListView> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete', style: TextStyle(color: AppColors.danger)),
+            child: const Text('Delete', style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -156,6 +168,15 @@ class _CustomerListViewState extends ConsumerState<CustomerListView> {
     }
   }
 
+  String _getInitials(String name) {
+    if (name.isEmpty) return '?';
+    final parts = name.trim().split(' ');
+    if (parts.length > 1) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return parts[0][0].toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(customerControllerProvider);
@@ -168,13 +189,23 @@ class _CustomerListViewState extends ConsumerState<CustomerListView> {
       backgroundColor: AppColors.background,
       body: Column(
         children: [
-          Padding(
+          Container(
+            color: Colors.white,
             padding: const EdgeInsets.all(16.0),
             child: TextField(
               controller: _searchController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Search by name or phone...',
-                prefixIcon: Icon(Icons.search),
+                prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary, size: 20),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
               ),
               onChanged: (val) => setState(() => _searchQuery = val),
             ),
@@ -183,40 +214,156 @@ class _CustomerListViewState extends ConsumerState<CustomerListView> {
             child: state.isLoading && state.customers.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : filteredList.isEmpty
-                    ? const Center(child: Text('No customers found', style: TextStyle(color: AppColors.textSecondary)))
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.people_outline, size: 64, color: AppColors.textMuted.withOpacity(0.5)),
+                            const SizedBox(height: 12),
+                            Text('No customers found', style: TextStyle(color: AppColors.textSecondary, fontSize: 15, fontWeight: FontWeight.w500)),
+                          ],
+                        ),
+                      )
                     : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.all(16),
                         itemCount: filteredList.length,
                         itemBuilder: (context, index) {
                           final customer = filteredList[index];
+                          final initials = _getInitials(customer.name);
+
                           return Card(
                             margin: const EdgeInsets.only(bottom: 12),
-                            child: ListTile(
-                              title: Text(customer.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Phone: ${customer.phone}'),
-                                  if (customer.email != null) Text('Email: ${customer.email}'),
-                                  if (customer.address != null) Text('Address: ${customer.address}'),
-                                ],
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, color: AppColors.primary),
-                                    onPressed: () => _showAddOrEditDialog(customer),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: const BorderSide(color: AppColors.border, width: 1),
+                            ),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(16),
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) => CustomerDetailsView(customer: customer),
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete, color: AppColors.danger),
-                                    onPressed: () => _deleteCustomer(customer.id),
+                                );
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.all(14.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                  Row(
+                                    children: [
+                                      // Profile initials avatar
+                                      Container(
+                                        height: 48,
+                                        width: 48,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primaryLight,
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            initials,
+                                            style: const TextStyle(
+                                              color: AppColors.primary,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 14),
+                                      // Details
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              customer.name,
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Row(
+                                              children: [
+                                                const Icon(Icons.phone_outlined, size: 12, color: AppColors.textSecondary),
+                                                const SizedBox(width: 4),
+                                                Text(customer.phone, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                                              ],
+                                            ),
+                                            if (customer.email != null) ...[
+                                              const SizedBox(height: 2),
+                                              Row(
+                                                children: [
+                                                  const Icon(Icons.mail_outline, size: 12, color: AppColors.textSecondary),
+                                                  const SizedBox(width: 4),
+                                                  Expanded(
+                                                    child: Text(
+                                                      customer.email!,
+                                                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                            if (customer.address != null) ...[
+                                              const SizedBox(height: 2),
+                                              Row(
+                                                children: [
+                                                  const Icon(Icons.location_on_outlined, size: 12, color: AppColors.textSecondary),
+                                                  const SizedBox(width: 4),
+                                                  Expanded(
+                                                    child: Text(
+                                                      customer.address!,
+                                                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                      // Actions
+                                      Row(
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.edit_outlined, color: AppColors.primary, size: 20),
+                                            onPressed: () => _showAddOrEditDialog(customer),
+                                            tooltip: 'Edit Profile',
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
+                                            onPressed: () => _deleteCustomer(customer.id),
+                                            tooltip: 'Delete Profile',
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                  const Divider(color: AppColors.border, height: 16),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Created by: ${customer.creatorName ?? 'System'}',
+                                        style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+                                      ),
+                                      Text(
+                                        DateFormat('dd-MMM-yyyy').format(customer.createdAt),
+                                        style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+                                      ),
+                                    ],
+                                  ),
+                                 ],
                               ),
                             ),
-                          );
-                        },
+                          ),
+                        );
+                      },
                       ),
           ),
         ],
@@ -224,6 +371,7 @@ class _CustomerListViewState extends ConsumerState<CustomerListView> {
       floatingActionButton: FloatingActionButton(
         heroTag: 'customer_fab',
         backgroundColor: AppColors.primary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         onPressed: () => _showAddOrEditDialog(),
         child: const Icon(Icons.add, color: Colors.white),
       ),

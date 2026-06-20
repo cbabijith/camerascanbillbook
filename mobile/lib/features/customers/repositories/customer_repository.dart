@@ -7,7 +7,7 @@ class CustomerRepository {
   Future<List<Customer>> getCustomers(String branchId) async {
     final response = await _client
         .from('customers')
-        .select()
+        .select('*, creator:profiles!created_by(name)')
         .eq('branch_id', branchId)
         .order('name');
     return (response as List).map((json) => Customer.fromJson(json)).toList();
@@ -16,7 +16,7 @@ class CustomerRepository {
   Future<List<Customer>> searchCustomers(String branchId, String query) async {
     final response = await _client
         .from('customers')
-        .select()
+        .select('*, creator:profiles!created_by(name)')
         .eq('branch_id', branchId)
         .or('name.ilike.%$query%,phone.ilike.%$query%')
         .limit(10);
