@@ -1,0 +1,113 @@
+Camera Shop Billing Software
+Requirements Document
+Version 1.0  |  Draft for Client Review
+Project Overview
+This document outlines the scope and features of a billing software built specifically for your camera shop. The goal is to make day-to-day billing, product management, and customer tracking simple and efficient — all from a single web application.
+Project Type
+Web Application (accessible from browser on any device)
+Access
+Single admin login — the shop owner or any user with the credentials can log in and manage the system
+Platform
+Works on desktop, laptop, tablet, and mobile browser — fully mobile responsive
+Module 1 — Admin Login
+A simple login screen protects the software. The shop owner or any user with the credentials can log in and access the system.
+What you can do:
+Log in with a username and password
+Log out securely
+Details:
+Single admin account (no multiple users or roles)
+Session stays active until you log out or close the browser
+Module 2 — Customer Management
+Keep a simple record of your customers so you can quickly find them when creating a bill.
+What you can do:
+Add a new customer
+Edit customer details
+Delete a customer
+Search and filter customers by name or phone number
+Customer Details:
+Field
+Details
+Required?
+Name
+Customer full name
+Required
+Phone Number
+Mobile number
+Required
+Email
+Email address
+Optional
+Address
+Shop or home address
+Optional
+Module 3 — Product Management
+Maintain a catalogue of all products you sell in the shop. These products will be available to select when creating a bill.
+What you can do:
+Add a new product
+Edit product details
+Delete a product
+Search and filter products by name or category
+Product Details:
+Field
+Details
+Required?
+Product Name
+Name of the camera/accessory
+Required
+Category
+E.g. Camera, Lens, Tripod, Bag
+Required
+SKU / Code
+Unique product code or barcode
+Required
+Selling Price
+Price shown to the customer
+Required
+Stock Quantity
+Current stock available
+Pending — see below
+⚠  Pending Client Decision
+Do you need stock management?
+
+If YES — we will track how many units you have in stock, and the system will reduce the count every time a sale is made.
+
+If NO — we will remove the stock quantity field and keep the product details simple.
+
+Please confirm your preference.
+Module 4 — Billing & Invoice
+This is the main working page of the software. You can create new bills, view past bills, generate a PDF invoice, and share it directly on WhatsApp — all from the same page.
+4.1  Creating a New Bill
+Select the customer from your saved list (or add a new one on the spot)
+Search and add products to the bill
+Set quantity for each item — price calculates automatically
+Apply GST if applicable (optional toggle per bill)
+Enter GST percentage (e.g. 5%, 12%, 18%)
+System auto-calculates subtotal and final total
+Mark the bill as Paid or Unpaid
+⚠  Pending Client Decision
+How should GST be applied to the product price?
+
+Option A — Inclusive: GST is already included within the product price.
+Example: Product price = ₹10,000. This already includes 18% GST. The GST amount shown on the invoice = ₹1,525, and the base price = ₹8,475.
+
+Option B — Exclusive: GST is added on top of the product price.
+Example: Product price = ₹10,000. GST 18% is added separately. Final invoice total = ₹11,800.
+
+Please confirm which method your shop follows.
+4.2  Managing Bills
+View list of all past bills
+Filter bills by date, customer, or payment status (Paid / Unpaid)
+Open and view any past bill
+Edit a bill before it is finalised
+4.3  Invoice PDF & WhatsApp Sharing
+Generate a clean, professional PDF invoice for any bill
+Invoice includes: shop name, customer details, itemised product list, GST breakdown (if applied), and total amount
+Share the invoice directly to the customer via WhatsApp with one click
+Next Steps
+Please review this document and confirm the following:
+Are all the modules listed above correct?
+Do you need stock management in Product Management? (Yes / No)
+How should GST be calculated? (Inclusive within price  /  Exclusive added on top)
+Any additional changes or features before we begin development?
+Once you confirm, we will move forward with building the software.
+Prepared for client review  |  All details subject to change based on confirmation
