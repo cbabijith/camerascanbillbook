@@ -56,44 +56,69 @@ class _DashboardLayoutViewState extends ConsumerState<DashboardLayoutView> {
     final List<BottomNavigationBarItem> tabItems = [];
 
     if (isAdmin) {
+      // 1. Analytics
       views.add(const AnalyticsView());
       tabItems.add(const BottomNavigationBarItem(
         icon: Icon(Icons.bar_chart),
         label: 'Analytics',
       ));
+      
+      // 2. Invoices
+      views.add(const BillsListView());
+      tabItems.add(const BottomNavigationBarItem(
+        icon: Icon(Icons.history),
+        label: 'Invoices',
+      ));
+      
+      // 3. Products
+      views.add(const ProductListView());
+      tabItems.add(const BottomNavigationBarItem(
+        icon: Icon(Icons.shopping_bag),
+        label: 'Products',
+      ));
+      
+      // 4. Customers
+      views.add(const CustomerListView());
+      tabItems.add(const BottomNavigationBarItem(
+        icon: Icon(Icons.people),
+        label: 'Customers',
+      ));
+      
+      // 5. Settings
       views.add(const SettingsView());
       tabItems.add(const BottomNavigationBarItem(
         icon: Icon(Icons.settings),
         label: 'Settings',
       ));
     } else {
+      // 1. New Bill
       views.add(const BillingFormView());
       tabItems.add(const BottomNavigationBarItem(
         icon: Icon(Icons.receipt_long),
         label: 'New Bill',
       ));
-    }
-
-    views.addAll([
-      const BillsListView(),
-      const CustomerListView(),
-      const ProductListView(),
-    ]);
-
-    tabItems.addAll([
-      const BottomNavigationBarItem(
+      
+      // 2. Invoices
+      views.add(const BillsListView());
+      tabItems.add(const BottomNavigationBarItem(
         icon: Icon(Icons.history),
         label: 'Invoices',
-      ),
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.people),
-        label: 'Customers',
-      ),
-      const BottomNavigationBarItem(
+      ));
+      
+      // 3. Products
+      views.add(const ProductListView());
+      tabItems.add(const BottomNavigationBarItem(
         icon: Icon(Icons.shopping_bag),
         label: 'Products',
-      ),
-    ]);
+      ));
+      
+      // 4. Customers
+      views.add(const CustomerListView());
+      tabItems.add(const BottomNavigationBarItem(
+        icon: Icon(Icons.people),
+        label: 'Customers',
+      ));
+    }
 
     // Active Branch details
     final activeBranch = branchState.branches.firstWhere(
