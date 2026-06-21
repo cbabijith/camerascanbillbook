@@ -65,7 +65,7 @@ class AuthController extends Notifier<AuthState> {
       await _repository.signIn(email: email, password: password);
       return true;
     } catch (e) {
-      state = state.copyWith(errorMessage: e.toString(), isLoading: false);
+      state = state.copyWith(errorMessage: _getErrorMessage(e), isLoading: false);
       return false;
     }
   }
@@ -95,7 +95,7 @@ class AuthController extends Notifier<AuthState> {
       state = state.copyWith(isSetupRequired: false, isLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(errorMessage: e.toString(), isLoading: false);
+      state = state.copyWith(errorMessage: _getErrorMessage(e), isLoading: false);
       return false;
     }
   }
@@ -104,6 +104,17 @@ class AuthController extends Notifier<AuthState> {
     state = state.copyWith(isLoading: true);
     await _repository.signOut();
     state = AuthState();
+  }
+
+  String _getErrorMessage(Object e) {
+    if (e is sb.AuthException) {
+      final msg = e.message;
+      if (msg.toLowerCase().contains('invalid login credentials')) {
+        return 'Incorrect email or password. Please try again.';
+      }
+      return msg;
+    }
+    return 'An unexpected error occurred. Please try again.';
   }
 }
 

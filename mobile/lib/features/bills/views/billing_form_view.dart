@@ -335,7 +335,7 @@ class _BillingFormViewState extends ConsumerState<BillingFormView> {
             controller: _productSearchController,
             onChanged: _onProductSearchChanged,
             decoration: const InputDecoration(
-              hintText: 'Search product by name or SKU...',
+              hintText: 'Search product by name or Serial Number...',
               prefixIcon: Icon(Icons.search),
             ),
           ),
@@ -351,7 +351,7 @@ class _BillingFormViewState extends ConsumerState<BillingFormView> {
                   final p = _productSearchResults[idx];
                   return ListTile(
                     title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text('SKU: ${p.sku} • Price: ₹${p.sellingPrice}'),
+                    subtitle: Text('Serial Number: ${p.sku} • Price: ₹${p.sellingPrice}'),
                     onTap: () => _addProductToBill(p),
                   );
                 },
@@ -371,42 +371,33 @@ class _BillingFormViewState extends ConsumerState<BillingFormView> {
               separatorBuilder: (c, i) => const Divider(color: AppColors.border),
               itemBuilder: (c, idx) {
                 final item = _billItems[idx];
-                final double price = (item['sellingPrice'] as num).toDouble();
-                final int qty = (item['qty'] as num).toInt();
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('Price: ₹$price • SKU: ${item['sku']}'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove_circle_outline),
-                        onPressed: () {
-                          setState(() {
-                            if (qty > 1) {
-                              item['qty'] = qty - 1;
-                            } else {
-                              _billItems.removeAt(idx);
-                            }
-                          });
-                        },
-                      ),
-                      Text('$qty', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline),
-                        onPressed: () {
-                          setState(() {
-                            item['qty'] = qty + 1;
-                          });
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, color: AppColors.danger),
-                        onPressed: () => setState(() => _billItems.removeAt(idx)),
-                      )
-                    ],
-                  ),
+                return BillItemTile(
+                  item: item,
+                  onQtyIncrement: () {
+                    setState(() {
+                      item['qty'] = (item['qty'] as num).toInt() + 1;
+                    });
+                  },
+                  onQtyDecrement: () {
+                    setState(() {
+                      final int currentQty = (item['qty'] as num).toInt();
+                      if (currentQty > 1) {
+                        item['qty'] = currentQty - 1;
+                      } else {
+                        _billItems.removeAt(idx);
+                      }
+                    });
+                  },
+                  onDelete: () {
+                    setState(() {
+                      _billItems.removeAt(idx);
+                    });
+                  },
+                  onPriceChanged: (newPrice) {
+                    setState(() {
+                      item['sellingPrice'] = newPrice;
+                    });
+                  },
                 );
               },
             ),
@@ -497,6 +488,172 @@ class _BillingFormViewState extends ConsumerState<BillingFormView> {
               const Text('Final Invoice Total:', style: TextStyle(fontWeight: FontWeight.bold)),
               Text('₹${_total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class BillItemTile extends StatefulWidget {
+  final Map<String, dynamic> item;
+  final VoidCallback onDelete;
+  final VoidCallback onQtyIncrement;
+  final VoidCallback onQtyDecrement;
+  final ValueChanged<double> onPriceChanged;
+
+  const BillItemTile({
+    super.key,
+    required this.item,
+    required this.onDelete,
+    required this.onQtyIncrement,
+    required this.onQtyDecrement,
+    required this.onPriceChanged,
+  });
+
+  @override
+  State<BillItemTile> createState() => _BillItemTileState();
+}
+
+class _BillItemTileState extends State<BillItemTile> {
+  late TextEditingController _priceController;
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    final double price = (widget.item['sellingPrice'] as num).toDouble();
+    _priceController = TextEditingController(text: price.toStringAsFixed(2));
+  }
+
+  @override
+  void didUpdateWidget(covariant BillItemTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final double price = (widget.item['sellingPrice'] as num).toDouble();
+    final double oldPrice = (oldWidget.item['sellingPrice'] as num).toDouble();
+    if (price != oldPrice && !_focusNode.hasFocus) {
+      _priceController.text = price.toStringAsFixed(2);
+    }
+  }
+
+  @override
+  void dispose() {
+    _priceController.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final int qty = (widget.item['qty'] as num).toInt();
+    final double price = (widget.item['sellingPrice'] as num).toDouble();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top Row: Item Name and Delete Button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  widget.item['name'],
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 22),
+                onPressed: widget.onDelete,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          // Serial Number
+          Text(
+            'Serial Number: ${widget.item['sku']}',
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          // Bottom Row: Price Input and Qty Controls
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Price input
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Price: ₹', style: TextStyle(fontSize: 13)),
+                  const SizedBox(width: 4),
+                  SizedBox(
+                    width: 115,
+                    height: 32,
+                    child: TextFormField(
+                      controller: _priceController,
+                      focusNode: _focusNode,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                      decoration: const InputDecoration(
+                        contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        isDense: true,
+                        enabledBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: AppColors.border, width: 1.5),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: AppColors.primary, width: 2.0),
+                        ),
+                        border: OutlineInputBorder(
+                          borderSide: BorderSide(color: AppColors.border, width: 1.5),
+                        ),
+                      ),
+                      onChanged: (val) {
+                        final newPrice = double.tryParse(val) ?? 0.0;
+                        widget.onPriceChanged(newPrice);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              // Qty controls
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline, size: 22),
+                    onPressed: widget.onQtyDecrement,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Text('$qty', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline, size: 22),
+                    onPressed: widget.onQtyIncrement,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Item Total
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              'Total: ₹${(price * qty).toStringAsFixed(2)}',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
           ),
         ],
       ),
