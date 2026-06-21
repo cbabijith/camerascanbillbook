@@ -11,8 +11,9 @@ import '../../../core/widgets/custom_widgets.dart';
 
 class BillingFormView extends ConsumerStatefulWidget {
   final Map<String, dynamic>? editBill;
+  final bool showAppBar;
 
-  const BillingFormView({super.key, this.editBill});
+  const BillingFormView({super.key, this.editBill, this.showAppBar = false});
 
   @override
   ConsumerState<BillingFormView> createState() => _BillingFormViewState();
@@ -179,6 +180,21 @@ class _BillingFormViewState extends ConsumerState<BillingFormView> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      appBar: widget.showAppBar
+          ? AppBar(
+              title: const Text('New Invoice', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              backgroundColor: Colors.white,
+              elevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(1.0),
+                child: Container(color: AppColors.border, height: 1.0),
+              ),
+            )
+          : null,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(

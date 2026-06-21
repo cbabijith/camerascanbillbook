@@ -6,6 +6,8 @@ import '../models/bill.dart';
 import '../utils/invoice_pdf_helper.dart';
 import 'bill_details_view.dart';
 import '../../branches/controllers/branch_controller.dart';
+import '../../auth/controllers/auth_controller.dart';
+import 'billing_form_view.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/custom_widgets.dart';
 
@@ -198,6 +200,8 @@ class _BillsListViewState extends ConsumerState<BillsListView> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(billControllerProvider);
+    final authState = ref.watch(authControllerProvider);
+    final isAdmin = authState.profile?.isAdmin ?? false;
 
     final filtered = state.bills.where((b) {
       final q = _searchQuery.toLowerCase();
@@ -432,6 +436,21 @@ class _BillsListViewState extends ConsumerState<BillsListView> {
           ),
         ],
       ),
+      floatingActionButton: isAdmin
+          ? FloatingActionButton.extended(
+              onPressed: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const BillingFormView(showAppBar: true),
+                  ),
+                );
+                ref.read(billControllerProvider.notifier).fetchBills();
+              },
+              backgroundColor: AppColors.primary,
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text('New Invoice', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            )
+          : null,
     );
   }
 
