@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import { generateInvoiceFile, generateInvoiceBlob, downloadInvoicePDF, printInvoicePDF } from '@/lib/pdf-generator'
 import { createClient } from '@/lib/supabase/client'
-import { collectPayment, deleteBill } from '@/app/actions/billing'
+import { collectPayment, deleteBill, uploadInvoice } from '@/app/actions/billing'
 
 interface BillItem {
   productId: string
@@ -82,6 +82,8 @@ export default function BillsList({ initialBills, activeBranch, userRole }: Bill
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null)
   const [isReceiptOpen, setIsReceiptOpen] = useState(false)
   const [sharingBillId, setSharingBillId] = useState<string | null>(null)
+  const [customWhatsAppPhone, setCustomWhatsAppPhone] = useState('')
+  const [whatsappShareBill, setWhatsappShareBill] = useState<Bill | null>(null)
   const [collectBill, setCollectBill] = useState<Bill | null>(null)
   const [collectAmount, setCollectAmount] = useState('')
   const [collectPaymentMethod, setCollectPaymentMethod] = useState<'upi' | 'bank' | 'cash' | 'card'>('cash')
@@ -124,7 +126,14 @@ export default function BillsList({ initialBills, activeBranch, userRole }: Bill
   // Open Receipt
   const handleOpenReceipt = (bill: Bill) => {
     setSelectedBill(bill)
+    setCustomWhatsAppPhone(bill.customer_phone || '')
     setIsReceiptOpen(true)
+  }
+
+  // Open WhatsApp dialog with prefilled customer phone
+  const handleOpenWhatsAppDialog = (bill: Bill) => {
+    setWhatsappShareBill(bill)
+    setCustomWhatsAppPhone(bill.customer_phone || '')
   }
 
   // Direct print from table — generates PDF and triggers print dialog
@@ -134,101 +143,69 @@ export default function BillsList({ initialBills, activeBranch, userRole }: Bill
 
   // Build the WhatsApp text summary for a bill
   const buildWhatsAppText = (bill: Bill, pdfUrl?: string) => {
-    const formattedDate = format(new Date(bill.created_at), 'dd-MMM-yyyy')
-    let text = `*INVOICE: ${bill.bill_number}*\n`
-    text += `Date: ${formattedDate}\n`
-    text += `Store: ${activeBranch?.name || 'Camera Shop'}\n`
-    text += `Customer: ${bill.customer_name} (${bill.customer_phone})\n`
-    text += `=========================\n`
-
-    bill.items.forEach((item) => {
-      text += `- ${item.name} (${item.qty} x ${formatINR(item.sellingPrice)}) = ${formatINR(item.total)}\n`
-    })
-
-    text += `=========================\n`
-    text += `Subtotal: ${formatINR(bill.sub_total)}\n`
-    text += `*Grand Total: ${formatINR(bill.total)}*\n`
-    text += `Payment Status: *${bill.payment_status.toUpperCase()}*\n\n`
-
-    if (pdfUrl) {
-      text += `📄 Download Invoice PDF:\n${pdfUrl}\n\n`
+    let storeName = activeBranch?.name || 'Camera Scan'
+    if (storeName.toLowerCase() === 'true camera') {
+      storeName = 'Camera Scan'
     }
-
-    text += `Thank you for shopping with us!`
+    if (!pdfUrl) {
+      return `Dear Customer,\n\nThanks for shopping at ${storeName}. Your invoice ${bill.bill_number} for ${formatINR(bill.total)} has been generated.\n\nThank you!`
+    }
+    let text = `Dear Customer,\n\n`
+    text += `Thanks for shopping at ${storeName}. As part of our green initiative, your digital bill (${bill.bill_number}) awaits:\n`
+    text += `${pdfUrl}\n\n`
+    text += `Happy Shopping!`
     return text
   }
 
   // Open WhatsApp with text (and optional PDF link)
-  const openWhatsApp = (bill: Bill, pdfUrl?: string) => {
+  const openWhatsApp = (bill: Bill, pdfUrl?: string, phoneOverride?: string) => {
     const text = buildWhatsAppText(bill, pdfUrl)
     const encodedText = encodeURIComponent(text)
-    const cleanPhone = bill.customer_phone.replace(/\D/g, '')
-    const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`
+    const targetPhone = phoneOverride || bill.customer_phone
+    let cleanPhone = targetPhone.replace(/\D/g, '')
+    if (cleanPhone.length === 10) {
+      cleanPhone = '91' + cleanPhone
+    }
+    const url = `https://wa.me/${cleanPhone}?text=${encodedText}`
     window.open(url, '_blank')
   }
 
+  // Helper to convert Blob to base64 string
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.readAsDataURL(blob)
+      reader.onloadend = () => {
+        const base64String = reader.result as string
+        const base64Data = base64String.split(',')[1]
+        resolve(base64Data)
+      }
+      reader.onerror = reject
+    })
+  }
+
   // Handle WhatsApp Share with PDF
-  const handleWhatsAppShare = async (bill: Bill) => {
+  const handleWhatsAppShare = async (bill: Bill, phoneOverride?: string) => {
     setSharingBillId(bill.id)
     try {
-      // Step 1: Generate the PDF file
-      const pdfFile = generateInvoiceFile(bill, activeBranch)
+      const pdfBlob = generateInvoiceBlob(bill, activeBranch)
+      const base64Data = await blobToBase64(pdfBlob)
+      const fileName = `${bill.id}.pdf`
 
-      // Step 2: Try native share (works well on mobile)
-      if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare?.({ files: [pdfFile] })) {
-        try {
-          await navigator.share({
-            title: `Invoice ${bill.bill_number}`,
-            text: buildWhatsAppText(bill),
-            files: [pdfFile]
-          })
-          toast.success('Invoice shared successfully!')
-          setSharingBillId(null)
-          return
-        } catch (shareErr: unknown) {
-          // User cancelled or share failed – fall through to upload approach
-          if (shareErr instanceof DOMException && shareErr.name === 'AbortError') {
-            setSharingBillId(null)
-            return
-          }
-        }
+      const res = await uploadInvoice(fileName, base64Data)
+
+      if (res && res.publicUrl) {
+        const secureUrl = `${window.location.origin}/bill/${bill.id}`
+        openWhatsApp(bill, secureUrl, phoneOverride)
+        toast.success('Invoice shared successfully!')
+      } else {
+        const errorMsg = res?.error || 'Unknown upload error'
+        console.warn('Supabase upload failed, falling back to download:', errorMsg)
+        // Fallback – download PDF locally and open WhatsApp with text only
+        downloadInvoicePDF(bill, activeBranch)
+        toast.info('PDF downloaded! Attach it manually in WhatsApp.')
+        openWhatsApp(bill, undefined, phoneOverride)
       }
-
-      // Step 3: Upload to Supabase Storage and get a public URL
-      try {
-        const supabase = createClient()
-        const pdfBlob = generateInvoiceBlob(bill, activeBranch)
-        const filePath = `${bill.bill_number}.pdf`
-
-        const { error: uploadError } = await supabase.storage
-          .from('invoices')
-          .upload(filePath, pdfBlob, {
-            contentType: 'application/pdf',
-            upsert: true
-          })
-
-        if (!uploadError) {
-          const { data: urlData } = supabase.storage
-            .from('invoices')
-            .getPublicUrl(filePath)
-
-          if (urlData?.publicUrl) {
-            openWhatsApp(bill, urlData.publicUrl)
-            toast.success('Invoice PDF link sent to WhatsApp!')
-            setSharingBillId(null)
-            return
-          }
-        }
-        // If upload failed, fall through to download fallback
-        console.warn('Supabase upload failed, falling back to download:', uploadError)
-      } catch (storageErr) {
-        console.warn('Supabase storage not available, falling back to download:', storageErr)
-      }
-
-      // Step 4: Fallback – download PDF locally and open WhatsApp with text only
-      downloadInvoicePDF(bill, activeBranch)
-      toast.info('PDF downloaded! Attach it manually in WhatsApp.')
-      openWhatsApp(bill)
     } catch (err) {
       console.error('Failed to share invoice:', err)
       toast.error('Failed to generate invoice PDF.')
@@ -416,7 +393,7 @@ export default function BillsList({ initialBills, activeBranch, userRole }: Bill
                           type="button"
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleWhatsAppShare(bill)}
+                          onClick={() => handleOpenWhatsAppDialog(bill)}
                           disabled={sharingBillId === bill.id}
                           className="h-7 w-7 border border-zinc-200 hover:bg-white text-teal-600 hover:text-teal-500 hover:bg-teal-500/10"
                           title="Share on WhatsApp"
@@ -543,7 +520,7 @@ export default function BillsList({ initialBills, activeBranch, userRole }: Bill
                       type="button"
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleWhatsAppShare(bill)}
+                      onClick={() => handleOpenWhatsAppDialog(bill)}
                       disabled={sharingBillId === bill.id}
                       className="h-8 w-8 border border-zinc-200 hover:bg-white text-teal-600"
                     >
@@ -700,7 +677,7 @@ export default function BillsList({ initialBills, activeBranch, userRole }: Bill
                       {selectedBill.payment_collections.map((pc, idx) => (
                         <div key={pc.id} className="flex items-start gap-3">
                           <div className="flex flex-col items-center pt-0.5">
-                            <div className={`h-2.5 w-2.5 rounded-full ${idx === 0 ? 'bg-indigo-500' : 'bg-zinc-300'}`} />
+                            <div className="h-2.5 w-2.5 rounded-full bg-zinc-400" />
                             {idx < selectedBill.payment_collections!.length - 1 && (
                               <div className="w-px h-full bg-zinc-200 mt-1" />
                             )}
@@ -743,6 +720,39 @@ export default function BillsList({ initialBills, activeBranch, userRole }: Bill
                 </div>
               </div>
 
+              {/* WhatsApp Share Options (to unsaved numbers) */}
+              <div className="mt-4 p-3 border border-zinc-200 rounded-md bg-zinc-50/50 space-y-2 text-xs print:hidden">
+                <Label htmlFor="whatsapp-number" className="text-zinc-700 font-semibold block">
+                  WhatsApp Phone Number (for unsaved number)
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="whatsapp-number"
+                    type="text"
+                    placeholder="Enter phone number (e.g. 919876543210)"
+                    value={customWhatsAppPhone}
+                    onChange={(e) => setCustomWhatsAppPhone(e.target.value)}
+                    className="h-9 border-zinc-200 bg-white text-zinc-900 focus-visible:ring-indigo-600 text-xs flex-1"
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => handleWhatsAppShare(selectedBill, customWhatsAppPhone)}
+                    disabled={sharingBillId === selectedBill.id}
+                    className="h-9 bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 font-semibold gap-1"
+                  >
+                    {sharingBillId === selectedBill.id ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Share2 className="h-3 w-3" />
+                    )}
+                    Send
+                  </Button>
+                </div>
+                <p className="text-[10px] text-zinc-500">
+                  By default, it uses the customer's phone number. Enter a different number to share directly.
+                </p>
+              </div>
+
               {/* Actions */}
               <DialogFooter className="border-t border-zinc-200 pt-4 flex gap-2 sm:gap-0 print:hidden">
                 <Button
@@ -756,7 +766,7 @@ export default function BillsList({ initialBills, activeBranch, userRole }: Bill
                 </Button>
                 <Button
                   type="button"
-                  onClick={() => handleWhatsAppShare(selectedBill)}
+                  onClick={() => handleWhatsAppShare(selectedBill, customWhatsAppPhone)}
                   disabled={sharingBillId === selectedBill.id}
                   className="bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5"
                 >
@@ -904,6 +914,68 @@ export default function BillsList({ initialBills, activeBranch, userRole }: Bill
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* WhatsApp Share Dialog */}
+      <Dialog open={!!whatsappShareBill} onOpenChange={(open) => !open && setWhatsappShareBill(null)}>
+        <DialogContent className="bg-white border-zinc-200 text-zinc-900 sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5 text-emerald-600" />
+              Share Invoice on WhatsApp
+            </DialogTitle>
+            <DialogDescription className="text-zinc-500">
+              {whatsappShareBill && `Invoice ${whatsappShareBill.bill_number} - ${whatsappShareBill.customer_name}`}
+            </DialogDescription>
+          </DialogHeader>
+          {whatsappShareBill && (
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="whatsapp-share-phone" className="text-zinc-700 text-xs font-semibold">
+                  WhatsApp Phone Number
+                </Label>
+                <Input
+                  id="whatsapp-share-phone"
+                  type="text"
+                  placeholder="Enter 10-digit number or with country code"
+                  value={customWhatsAppPhone}
+                  onChange={(e) => setCustomWhatsAppPhone(e.target.value)}
+                  className="border-zinc-200 bg-white text-zinc-900 focus-visible:ring-indigo-600"
+                />
+                <p className="text-[10px] text-zinc-500">
+                  Pre-filled with customer number. Enter a different country-coded number to send to an unsaved contact.
+                </p>
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setWhatsappShareBill(null)}
+                  className="border-zinc-200 text-zinc-700 hover:bg-zinc-100"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={async () => {
+                    await handleWhatsAppShare(whatsappShareBill, customWhatsAppPhone)
+                    setWhatsappShareBill(null)
+                  }}
+                  disabled={sharingBillId === whatsappShareBill.id}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5"
+                >
+                  {sharingBillId === whatsappShareBill.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Share2 className="h-4 w-4" />
+                  )}
+                  Send on WhatsApp
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

@@ -169,13 +169,53 @@ export default function AnalyticsView({ initialData }: { initialData: BranchAnal
     { label: 'All Time', value: 'all' },
   ]
 
-  const renderStatCards = (b: typeof aggregate) => (
+  const PaymentMethodsStatCard = ({
+    methods
+  }: {
+    methods: { method: string; amount: number }[]
+  }) => {
+    const cashAmt = methods.find(m => m.method === 'cash')?.amount || 0
+    const upiAmt = methods.find(m => m.method === 'upi')?.amount || 0
+    const bankAmt = methods.find(m => m.method === 'bank')?.amount || 0
+    const cardAmt = methods.find(m => m.method === 'card')?.amount || 0
+
+    return (
+      <Card className="border-zinc-200 shadow-sm col-span-1">
+        <CardContent className="p-4 space-y-1.5 h-full flex flex-col justify-center">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 flex items-center gap-1">
+            <CreditCard className="h-3 w-3 text-indigo-500" />
+            Collection breakdown
+          </p>
+          <div className="space-y-1 text-xs">
+            <div className="flex justify-between items-center py-0.5 border-b border-zinc-100 last:border-0">
+              <span className="text-zinc-500">Cash:</span>
+              <span className="font-semibold text-zinc-950">{formatINR(cashAmt)}</span>
+            </div>
+            <div className="flex justify-between items-center py-0.5 border-b border-zinc-100 last:border-0">
+              <span className="text-zinc-500">UPI/Gpay:</span>
+              <span className="font-semibold text-zinc-950">{formatINR(upiAmt)}</span>
+            </div>
+            <div className="flex justify-between items-center py-0.5 border-b border-zinc-100 last:border-0">
+              <span className="text-zinc-500">Bank Trans:</span>
+              <span className="font-semibold text-zinc-950">{formatINR(bankAmt)}</span>
+            </div>
+            <div className="flex justify-between items-center py-0.5 border-b border-zinc-100 last:border-0">
+              <span className="text-zinc-500">Card:</span>
+              <span className="font-semibold text-zinc-950">{formatINR(cardAmt)}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const renderStatCards = (b: typeof aggregate, methods: { method: string; amount: number }[]) => (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
       <StatCard icon={FileText} label="Invoices" value={String(b.totalInvoices)} color="bg-indigo-500/10 text-indigo-600" />
       <StatCard icon={IndianRupee} label="Total Sales" value={formatINR(b.totalSales)} color="bg-emerald-500/10 text-emerald-600" />
       <StatCard icon={TrendingUp} label="Collected" value={formatINR(b.totalReceived)} color="bg-teal-500/10 text-teal-600" />
       <StatCard icon={Wallet} label="Outstanding Due" value={formatINR(b.totalDue)} color="bg-rose-500/10 text-rose-600" />
-      <StatCard icon={BarChart3} label="Avg Bill Value" value={formatINR(b.avgBillValue)} color="bg-violet-500/10 text-violet-600" />
+      <PaymentMethodsStatCard methods={methods} />
     </div>
   )
 
@@ -356,7 +396,7 @@ export default function AnalyticsView({ initialData }: { initialData: BranchAnal
 
         {/* All Branches Overview */}
         <TabsContent value="all" className="space-y-6 mt-4">
-          {renderStatCards(aggregate)}
+          {renderStatCards(aggregate, methodBreakdown)}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Payment Method Breakdown */}
@@ -427,9 +467,12 @@ export default function AnalyticsView({ initialData }: { initialData: BranchAnal
                         <p className="text-rose-600 font-semibold">Due</p>
                         <p className="text-rose-900 font-bold mt-0.5">{formatINR(branch.totalDue)}</p>
                       </div>
-                      <div className="rounded-lg bg-violet-50 border border-violet-100 px-3 py-2">
-                        <p className="text-violet-600 font-semibold">Avg Bill</p>
-                        <p className="text-violet-900 font-bold mt-0.5">{formatINR(branch.avgBillValue)}</p>
+                      <div className="rounded-lg bg-violet-50 border border-violet-100 px-3 py-2 flex flex-col justify-center">
+                        <p className="text-violet-600 font-semibold mb-0.5">Cash / UPI</p>
+                        <div className="flex justify-between items-center text-[10px] text-violet-900 font-bold">
+                          <span>C: {formatINR(branch.paymentMethodBreakdown.find(m => m.method === 'cash')?.amount || 0)}</span>
+                          <span>U: {formatINR(branch.paymentMethodBreakdown.find(m => m.method === 'upi')?.amount || 0)}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -448,7 +491,7 @@ export default function AnalyticsView({ initialData }: { initialData: BranchAnal
               totalReceived: branch.totalReceived,
               totalDue: branch.totalDue,
               avgBillValue: branch.avgBillValue,
-            })}
+            }, branch.paymentMethodBreakdown)}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <Card className="border-zinc-200 shadow-sm">

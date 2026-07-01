@@ -11,9 +11,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Minus, Trash2, Search, UserPlus, PackagePlus, Loader2, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
+import { Plus, Minus, Trash2, Search, UserPlus, PackagePlus, Loader2, ArrowRight, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
-import { formatINR } from '@/lib/utils'
+import { formatINR, cn } from '@/lib/utils'
 
 interface Customer {
   id: string
@@ -65,6 +66,12 @@ interface EditBillData {
   payment_status: 'paid' | 'unpaid' | 'advance' | 'partial'
   advance_amount?: number
   discount?: number
+  payment_collections?: {
+    id: string
+    amount: number
+    payment_method: 'upi' | 'bank' | 'cash' | 'card'
+    payment_type: string
+  }[]
 }
 
 interface BillingFormProps {
@@ -106,6 +113,77 @@ export default function BillingForm({ editBill }: BillingFormProps = {}) {
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'bank' | 'cash' | 'card'>('cash')
   const [isEditMode, setIsEditMode] = useState(false)
   const [editBillId, setEditBillId] = useState<string | null>(null)
+
+  // Split payment state
+  const [isSplitPayment, setIsSplitPayment] = useState(false)
+  const [splitPayments, setSplitPayments] = useState<{
+    method: 'cash' | 'upi' | 'card' | 'bank'
+    amount: string
+  }[]>([{ method: 'cash', amount: '' }])
+
+  // Helper to add a split payment row
+  const addSplitRow = () => {
+    if (splitPayments.length >= 4) {
+      toast.error('You can add a maximum of 4 split payment fields.')
+      return
+    }
+    const usedMethods = splitPayments.map(sp => sp.method)
+    const allMethods: ('cash' | 'upi' | 'card' | 'bank')[] = ['cash', 'upi', 'card', 'bank']
+    const available = allMethods.find(m => !usedMethods.includes(m))
+    if (available) {
+      setSplitPayments([...splitPayments, { method: available, amount: '' }])
+    } else {
+      toast.error('All payment methods have already been added.')
+    }
+  }
+
+  // Helper to remove a split payment row
+  const removeSplitRow = (index: number) => {
+    const updated = [...splitPayments]
+    updated.splice(index, 1)
+    setSplitPayments(updated)
+  }
+
+  // Helper to update a split payment row's method or amount
+  const updateSplitRow = (index: number, key: 'method' | 'amount', value: string) => {
+    const updated = [...splitPayments]
+    if (key === 'method') {
+      updated[index].method = value as 'cash' | 'upi' | 'card' | 'bank'
+    } else {
+      updated[index].amount = value
+    }
+    setSplitPayments(updated)
+  }
+
+  // Helper to check if a method is already selected in another row
+  const isMethodUsed = (method: 'cash' | 'upi' | 'card' | 'bank', currentIndex: number) => {
+    return splitPayments.some((sp, idx) => idx !== currentIndex && sp.method === method)
+  }
+
+  // Suggestion for existing customer
+  const [existingCustomerSuggestion, setExistingCustomerSuggestion] = useState<Customer | null>(null)
+
+  useEffect(() => {
+    const phone = newCustomer.phone.trim()
+    if (phone.length >= 5) {
+      const delayDebounce = setTimeout(async () => {
+        const results = await searchCustomers(phone)
+        const cleanPhone = phone.replace(/\D/g, '')
+        const exactMatch = results.find(c => {
+          const dbPhone = c.phone.replace(/\D/g, '')
+          return dbPhone.includes(cleanPhone) || cleanPhone.includes(dbPhone)
+        })
+        if (exactMatch) {
+          setExistingCustomerSuggestion(exactMatch)
+        } else {
+          setExistingCustomerSuggestion(null)
+        }
+      }, 300)
+      return () => clearTimeout(delayDebounce)
+    } else {
+      setExistingCustomerSuggestion(null)
+    }
+  }, [newCustomer.phone])
 
   // Inline Custom Product State
   const [isCustomProductOpen, setIsCustomProductOpen] = useState(false)
@@ -191,6 +269,23 @@ export default function BillingForm({ editBill }: BillingFormProps = {}) {
       if (editBill.discount && editBill.discount > 0) {
         setDiscount(String(editBill.discount))
       }
+
+      // Load split payments / payment collections if present
+      if (editBill.payment_collections && editBill.payment_collections.length > 0) {
+        const collections = editBill.payment_collections
+        const newSplits = collections.map((c) => ({
+          method: c.payment_method as 'cash' | 'upi' | 'card' | 'bank',
+          amount: String(c.amount)
+        }))
+
+        setSplitPayments(newSplits)
+        setIsSplitPayment(collections.length > 1)
+        if (collections.length === 1) {
+          setPaymentMethod(collections[0].payment_method)
+        }
+      } else {
+        setSplitPayments([{ method: 'cash', amount: '' }])
+      }
     }
   }, [editBill])
 
@@ -200,6 +295,7 @@ export default function BillingForm({ editBill }: BillingFormProps = {}) {
     setIsNewCustomer(false)
     setCustomerSearch('')
     setShowCustomerSearch(false)
+    setExistingCustomerSuggestion(null)
   }
 
   // Clear Selected Customer
@@ -208,6 +304,7 @@ export default function BillingForm({ editBill }: BillingFormProps = {}) {
     setIsNewCustomer(false)
     setNewCustomer({ name: '', phone: '', email: '', address: '' })
     setShowOptionalCustomerFields(false)
+    setExistingCustomerSuggestion(null)
   }
 
   // Select Product
@@ -321,6 +418,11 @@ export default function BillingForm({ editBill }: BillingFormProps = {}) {
 
   const totals = calculateTotals()
 
+  // Helper to calculate total split amount
+  const getSplitTotal = () => {
+    return splitPayments.reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0)
+  }
+
   // Handle final invoice submission
   const handleSubmitBill = () => {
     if (billItems.length === 0) {
@@ -338,15 +440,61 @@ export default function BillingForm({ editBill }: BillingFormProps = {}) {
       return
     }
 
-    if (paymentStatus === 'advance') {
-      const advAmt = parseFloat(advanceAmount)
-      if (isNaN(advAmt) || advAmt <= 0) {
-        toast.error('Please enter a valid advance amount.')
-        return
-      }
-      if (advAmt >= totals.total) {
-        toast.error('Advance amount cannot be greater than or equal to the total amount.')
-        return
+    let splitPaymentsPayload: { method: 'upi' | 'bank' | 'cash' | 'card'; amount: number }[] = []
+
+    if (paymentStatus === 'paid' || paymentStatus === 'advance') {
+      if (isSplitPayment) {
+        // Check for duplicate payment methods in split payments
+        const usedMethods = new Set()
+        for (const sp of splitPayments) {
+          if (usedMethods.has(sp.method)) {
+            toast.error(`Duplicate payment method detected: ${sp.method.toUpperCase()}. Each method can only be used once.`)
+            return
+          }
+          usedMethods.add(sp.method)
+        }
+
+        const splitTotal = getSplitTotal()
+
+        if (splitTotal <= 0) {
+          toast.error('Please enter at least one payment amount for split payment.')
+          return
+        }
+
+        if (paymentStatus === 'paid' && Math.round(splitTotal * 100) / 100 !== Math.round(totals.total * 100) / 100) {
+          toast.error(`Total split payment amount (${formatINR(splitTotal)}) must equal the grand total (${formatINR(totals.total)}).`)
+          return
+        }
+
+        if (paymentStatus === 'advance') {
+          if (splitTotal >= totals.total) {
+            toast.error('Total advance payment cannot be greater than or equal to the total amount.')
+            return
+          }
+        }
+
+        // Map splitPayments array to splitPaymentsPayload
+        splitPayments.forEach((sp) => {
+          const amt = parseFloat(sp.amount) || 0
+          if (amt > 0) {
+            splitPaymentsPayload.push({
+              method: sp.method,
+              amount: amt
+            })
+          }
+        })
+      } else {
+        if (paymentStatus === 'advance') {
+          const advAmt = parseFloat(advanceAmount)
+          if (isNaN(advAmt) || advAmt <= 0) {
+            toast.error('Please enter a valid advance amount.')
+            return
+          }
+          if (advAmt >= totals.total) {
+            toast.error('Advance amount cannot be greater than or equal to the total amount.')
+            return
+          }
+        }
       }
     }
 
@@ -362,9 +510,12 @@ export default function BillingForm({ editBill }: BillingFormProps = {}) {
             ...item
           })),
           paymentStatus,
-          advanceAmount: paymentStatus === 'advance' ? parseFloat(advanceAmount) : undefined,
+          advanceAmount: paymentStatus === 'advance' 
+            ? (isSplitPayment ? getSplitTotal() : parseFloat(advanceAmount)) 
+            : undefined,
           discount: discount ? parseFloat(discount) : 0,
-          paymentMethod: paymentStatus === 'paid' || paymentStatus === 'advance' ? paymentMethod : undefined
+          paymentMethod: paymentStatus === 'paid' || paymentStatus === 'advance' ? (isSplitPayment ? undefined : paymentMethod) : undefined,
+          splitPayments: splitPaymentsPayload.length > 0 ? splitPaymentsPayload : undefined
         }
 
         const res = isEditMode && editBillId
@@ -485,6 +636,22 @@ export default function BillingForm({ editBill }: BillingFormProps = {}) {
                     required
                     autoFocus
                   />
+                  {existingCustomerSuggestion && (
+                    <div className="p-2.5 rounded-md border border-indigo-200 bg-indigo-50/50 flex flex-col gap-1.5 text-xs mt-1 animate-in fade-in slide-in-from-top-1">
+                      <span className="text-zinc-700 font-medium">
+                        Customer with phone <strong>{existingCustomerSuggestion.phone}</strong> already exists: <strong>{existingCustomerSuggestion.name}</strong>
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleSelectCustomer(existingCustomerSuggestion)}
+                        className="border-indigo-300 text-indigo-600 hover:bg-indigo-50 py-1 h-7 text-xs font-semibold self-start"
+                      >
+                        Use "{existingCustomerSuggestion.name}" instead
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="cust-name" className="text-zinc-700 text-xs font-semibold">Customer Name *</Label>
@@ -554,23 +721,120 @@ export default function BillingForm({ editBill }: BillingFormProps = {}) {
             </div>
 
             {(paymentStatus === 'paid' || paymentStatus === 'advance') && (
-              <div className="space-y-2">
-                <Label className="text-zinc-700 text-xs">Payment Method</Label>
-                <Select value={paymentMethod} onValueChange={(val) => val && setPaymentMethod(val as 'upi' | 'bank' | 'cash' | 'card')}>
-                  <SelectTrigger className="border-zinc-200 bg-white text-zinc-900 focus:ring-indigo-500">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border-zinc-200 text-zinc-900">
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="upi">UPI</SelectItem>
-                    <SelectItem value="card">Card</SelectItem>
-                    <SelectItem value="bank">Bank Transfer</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="space-y-4 border-t border-zinc-100 pt-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="split-payment-toggle" className="text-zinc-700 text-xs font-semibold cursor-pointer">
+                    Split Payment Mode
+                  </Label>
+                  <Switch
+                    id="split-payment-toggle"
+                    checked={isSplitPayment}
+                    onCheckedChange={setIsSplitPayment}
+                  />
+                </div>
+
+                {!isSplitPayment ? (
+                  <div className="space-y-2">
+                    <Label className="text-zinc-700 text-xs">Payment Method</Label>
+                    <Select value={paymentMethod} onValueChange={(val) => val && setPaymentMethod(val as 'upi' | 'bank' | 'cash' | 'card')}>
+                      <SelectTrigger className="border-zinc-200 bg-white text-zinc-900 focus:ring-indigo-500">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border-zinc-200 text-zinc-900">
+                        <SelectItem value="cash">Cash</SelectItem>
+                        <SelectItem value="upi">UPI</SelectItem>
+                        <SelectItem value="card">Card</SelectItem>
+                        <SelectItem value="bank">Bank Transfer</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="space-y-3 p-3 bg-zinc-50 rounded-lg border border-zinc-200">
+                    <span className="text-xs font-bold text-zinc-700 block mb-1">Enter amounts for payment methods:</span>
+                    <div className="space-y-2">
+                      {splitPayments.map((sp, idx) => (
+                        <div key={idx} className="flex gap-2 items-center">
+                          <Select
+                            value={sp.method}
+                            onValueChange={(val) => val && updateSplitRow(idx, 'method', val)}
+                          >
+                            <SelectTrigger className="w-[120px] h-9 border-zinc-200 bg-white text-zinc-900 focus:ring-indigo-500 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-white border-zinc-200 text-zinc-900 text-xs">
+                              <SelectItem value="cash" disabled={isMethodUsed('cash', idx)}>Cash</SelectItem>
+                              <SelectItem value="upi" disabled={isMethodUsed('upi', idx)}>UPI</SelectItem>
+                              <SelectItem value="card" disabled={isMethodUsed('card', idx)}>Card</SelectItem>
+                              <SelectItem value="bank" disabled={isMethodUsed('bank', idx)}>Bank Transfer</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="number"
+                            placeholder="Amount"
+                            value={sp.amount}
+                            onChange={(e) => updateSplitRow(idx, 'amount', e.target.value)}
+                            className="h-9 border-zinc-200 bg-white text-zinc-900 focus-visible:ring-indigo-600 text-xs flex-1"
+                          />
+                          {splitPayments.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeSplitRow(idx)}
+                              className="h-9 w-9 text-rose-500 hover:text-rose-600 hover:bg-rose-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addSplitRow}
+                      disabled={splitPayments.length >= 4}
+                      className="w-full h-8 mt-1 border-dashed border-zinc-300 text-zinc-600 hover:text-zinc-800 hover:bg-zinc-100 flex items-center justify-center gap-1 text-xs disabled:opacity-50"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add Payment Method
+                    </Button>
+                    <div className="text-xs pt-1.5 border-t border-zinc-200/50 flex justify-between items-center">
+                      <span className="text-zinc-500">Total Entered:</span>
+                      <span className={cn(
+                        "font-bold",
+                        paymentStatus === 'paid'
+                          ? Math.round(getSplitTotal() * 100) / 100 === Math.round(totals.total * 100) / 100
+                            ? "text-emerald-600"
+                            : "text-rose-600"
+                          : "text-indigo-600"
+                      )}>
+                        {formatINR(getSplitTotal())}
+                        {paymentStatus === 'paid' && ` / ${formatINR(totals.total)}`}
+                      </span>
+                    </div>
+                    {paymentStatus === 'paid' && Math.round(getSplitTotal() * 100) / 100 !== Math.round(totals.total * 100) / 100 && (
+                      <div className={cn(
+                        "mt-2 p-2 rounded text-xs font-semibold flex items-center gap-1.5 border",
+                        getSplitTotal() < totals.total
+                          ? "bg-amber-50 border-amber-200 text-amber-700"
+                          : "bg-rose-50 border-rose-200 text-rose-700"
+                      )}>
+                        <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                        <span>
+                          {getSplitTotal() < totals.total
+                            ? `Remaining: ${formatINR(totals.total - getSplitTotal())} to be added.`
+                            : `Excess: ${formatINR(getSplitTotal() - totals.total)} to be removed.`}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
-            {paymentStatus === 'advance' && (
+            {paymentStatus === 'advance' && !isSplitPayment && (
               <div className="space-y-2">
                 <Label htmlFor="advance-amount" className="text-zinc-700 text-xs font-semibold">Advance Amount</Label>
                 <Input
@@ -600,6 +864,7 @@ export default function BillingForm({ editBill }: BillingFormProps = {}) {
                 placeholder="Enter flat discount amount"
                 value={discount}
                 onChange={(e) => setDiscount(e.target.value)}
+                onWheel={(e) => e.currentTarget.blur()}
                 className="border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-indigo-600"
               />
             </div>
@@ -615,16 +880,16 @@ export default function BillingForm({ editBill }: BillingFormProps = {}) {
                   <span>- {formatINR(totals.discount)}</span>
                 </div>
               )}
-              {paymentStatus === 'advance' && advanceAmount && !isNaN(parseFloat(advanceAmount)) && parseFloat(advanceAmount) < totals.total && (
+              {paymentStatus === 'advance' && (isSplitPayment ? getSplitTotal() > 0 : (advanceAmount && !isNaN(parseFloat(advanceAmount)))) && (isSplitPayment ? getSplitTotal() : parseFloat(advanceAmount)) < totals.total && (
                 <div className="flex justify-between text-sm text-zinc-600">
                   <span>Advance Paid:</span>
-                  <span>{formatINR(parseFloat(advanceAmount))}</span>
+                  <span>{formatINR(isSplitPayment ? getSplitTotal() : parseFloat(advanceAmount))}</span>
                 </div>
               )}
-              {paymentStatus === 'advance' && advanceAmount && !isNaN(parseFloat(advanceAmount)) && parseFloat(advanceAmount) < totals.total && (
+              {paymentStatus === 'advance' && (isSplitPayment ? getSplitTotal() > 0 : (advanceAmount && !isNaN(parseFloat(advanceAmount)))) && (isSplitPayment ? getSplitTotal() : parseFloat(advanceAmount)) < totals.total && (
                 <div className="flex justify-between text-sm font-semibold text-amber-700">
                   <span>Due Amount:</span>
-                  <span>{formatINR(totals.total - parseFloat(advanceAmount))}</span>
+                  <span>{formatINR(totals.total - (isSplitPayment ? getSplitTotal() : parseFloat(advanceAmount)))}</span>
                 </div>
               )}
               <div className="flex justify-between text-base font-bold text-zinc-900 pt-2 border-t border-zinc-200/50">

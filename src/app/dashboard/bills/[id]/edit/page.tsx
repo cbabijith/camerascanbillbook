@@ -12,7 +12,7 @@ export default async function EditBillPage({ params }: { params: Promise<{ id: s
   // Run user authentication/profile fetch and the bill query in parallel
   const [userBranchInfo, billResult] = await Promise.all([
     getCurrentUserAndBranch(),
-    supabase.from('bills').select('*').eq('id', id).single()
+    supabase.from('bills').select('*, payment_collections(*)').eq('id', id).single()
   ])
 
   const { user, branchId } = userBranchInfo

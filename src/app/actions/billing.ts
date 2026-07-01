@@ -20,12 +20,22 @@ export async function searchCustomers(query: string) {
   if (!branchId) return []
 
   const supabase = await createClient()
-  const { data, error } = await supabase
+  
+  // Clean query for phone matching: strip non-digits
+  const cleanPhoneQuery = query.replace(/\D/g, '')
+  
+  let dbQuery = supabase
     .from('customers')
     .select('*')
     .eq('branch_id', branchId)
-    .or(`name.ilike.%${query}%,phone.ilike.%${query}%`)
-    .limit(10)
+
+  if (cleanPhoneQuery.length > 0) {
+    dbQuery = dbQuery.or(`name.ilike.%${query}%,phone.ilike.%${query}%,phone.ilike.%${cleanPhoneQuery}%`)
+  } else {
+    dbQuery = dbQuery.or(`name.ilike.%${query}%,phone.ilike.%${query}%`)
+  }
+
+  const { data, error } = await dbQuery.limit(10)
 
   if (error) {
     console.error('Error searching customers:', error)
@@ -75,6 +85,7 @@ export async function createBill(data: {
   advanceAmount?: number
   discount?: number
   paymentMethod?: 'upi' | 'bank' | 'cash' | 'card'
+  splitPayments?: { method: 'upi' | 'bank' | 'cash' | 'card'; amount: number }[]
 }) {
   const { user, branchId } = await getCurrentUserAndBranch()
   if (!user || !branchId) {
@@ -203,21 +214,31 @@ export async function createBill(data: {
   totalFinal = Math.max(0, totalFinal - discount)
 
   // 3. Generate Sequential Bill Number (with retry for concurrent collisions)
-  const MAX_RETRIES = 3
+  const MAX_RETRIES = 5
   let bill: any = null
   let billError: any = null
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const { count, error: countError } = await supabase
+    const { data: latestBill, error: latestError } = await supabase
       .from('bills')
-      .select('id', { count: 'exact', head: true })
+      .select('bill_number')
       .eq('branch_id', branchId)
+      .order('bill_number', { ascending: false })
+      .limit(1)
 
-    if (countError) {
-      return { error: `Failed to generate bill number: ${countError.message}` }
+    if (latestError) {
+      return { error: `Failed to generate bill number: ${latestError.message}` }
     }
 
-    const nextIndex = (count || 0) + 1 + attempt
+    let maxNum = 0
+    if (latestBill && latestBill.length > 0) {
+      const match = latestBill[0].bill_number.match(/(\d+)/)
+      if (match) {
+        maxNum = parseInt(match[1], 10)
+      }
+    }
+
+    const nextIndex = maxNum + 1 + attempt
     const paddedNumber = String(nextIndex).padStart(4, '0')
     const billNumber = `INV-${paddedNumber}`
 
@@ -257,27 +278,45 @@ export async function createBill(data: {
     return { error: `Failed to generate invoice: ${billError.message}` }
   }
 
-  // 5. Record payment collection
-  if (data.paymentStatus === 'advance' && data.advanceAmount && data.advanceAmount > 0) {
-    await supabase
+  // 5. Record payment collections
+  if (data.splitPayments && data.splitPayments.length > 0) {
+    const collectionsToInsert = data.splitPayments.map((sp) => ({
+      bill_id: bill.id,
+      amount: sp.amount,
+      payment_type: data.paymentStatus === 'paid' ? ('final' as const) : ('advance' as const),
+      payment_method: sp.method,
+      collected_by: user.id
+    }))
+
+    const { error: collErr } = await supabase
       .from('payment_collections')
-      .insert({
-        bill_id: bill.id,
-        amount: data.advanceAmount,
-        payment_type: 'advance',
-        payment_method: data.paymentMethod || 'cash',
-        collected_by: user.id
-      })
-  } else if (data.paymentStatus === 'paid') {
-    await supabase
-      .from('payment_collections')
-      .insert({
-        bill_id: bill.id,
-        amount: Math.round(totalFinal * 100) / 100,
-        payment_type: 'final',
-        payment_method: data.paymentMethod || 'cash',
-        collected_by: user.id
-      })
+      .insert(collectionsToInsert)
+
+    if (collErr) {
+      console.error('Failed to save payment collections:', collErr)
+    }
+  } else {
+    if (data.paymentStatus === 'advance' && data.advanceAmount && data.advanceAmount > 0) {
+      await supabase
+        .from('payment_collections')
+        .insert({
+          bill_id: bill.id,
+          amount: data.advanceAmount,
+          payment_type: 'advance',
+          payment_method: data.paymentMethod || 'cash',
+          collected_by: user.id
+        })
+    } else if (data.paymentStatus === 'paid') {
+      await supabase
+        .from('payment_collections')
+        .insert({
+          bill_id: bill.id,
+          amount: Math.round(totalFinal * 100) / 100,
+          payment_type: 'final',
+          payment_method: data.paymentMethod || 'cash',
+          collected_by: user.id
+        })
+    }
   }
 
   revalidatePath('/dashboard')
@@ -376,6 +415,7 @@ export async function updateBill(billId: string, data: {
   advanceAmount?: number
   discount?: number
   paymentMethod?: 'upi' | 'bank' | 'cash' | 'card'
+  splitPayments?: { method: 'upi' | 'bank' | 'cash' | 'card'; amount: number }[]
 }) {
   const { user, branchId } = await getCurrentUserAndBranch()
   if (!user || !branchId) {
@@ -486,6 +526,53 @@ export async function updateBill(billId: string, data: {
     return { error: `Failed to update invoice: ${updateError.message}` }
   }
 
+  // Delete existing payment collections
+  await supabase
+    .from('payment_collections')
+    .delete()
+    .eq('bill_id', billId)
+
+  // Insert new payment collections
+  if (data.splitPayments && data.splitPayments.length > 0) {
+    const collectionsToInsert = data.splitPayments.map((sp) => ({
+      bill_id: billId,
+      amount: sp.amount,
+      payment_type: data.paymentStatus === 'paid' ? ('final' as const) : ('advance' as const),
+      payment_method: sp.method,
+      collected_by: user.id
+    }))
+
+    const { error: collErr } = await supabase
+      .from('payment_collections')
+      .insert(collectionsToInsert)
+
+    if (collErr) {
+      console.error('Failed to save updated payment collections:', collErr)
+    }
+  } else {
+    if (data.paymentStatus === 'advance' && data.advanceAmount && data.advanceAmount > 0) {
+      await supabase
+        .from('payment_collections')
+        .insert({
+          bill_id: billId,
+          amount: data.advanceAmount,
+          payment_type: 'advance',
+          payment_method: data.paymentMethod || 'cash',
+          collected_by: user.id
+        })
+    } else if (data.paymentStatus === 'paid') {
+      await supabase
+        .from('payment_collections')
+        .insert({
+          bill_id: billId,
+          amount: Math.round(totalFinal * 100) / 100,
+          payment_type: 'final',
+          payment_method: data.paymentMethod || 'cash',
+          collected_by: user.id
+        })
+    }
+  }
+
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/bills')
   revalidateTag('bills', 'max')
@@ -531,4 +618,47 @@ export async function fetchAnalytics(startDate: string, endDate: string) {
 
   const { getAnalyticsData } = await import('@/lib/cached-queries')
   return getAnalyticsData(startDate, endDate)
+}
+
+export async function uploadInvoice(fileName: string, base64Data: string) {
+  try {
+    const { createClient: createSupabaseClient } = await import('@supabase/supabase-js')
+    const supabaseAdmin = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
+    // Ensure the invoices bucket exists and is public
+    try {
+      await supabaseAdmin.storage.createBucket('invoices', {
+        public: true,
+        allowedMimeTypes: ['application/pdf']
+      })
+    } catch (bucketErr) {
+      // Ignore if bucket already exists
+    }
+
+    const buffer = Buffer.from(base64Data, 'base64')
+
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from('invoices')
+      .upload(fileName, buffer, {
+        contentType: 'application/pdf',
+        upsert: true
+      })
+
+    if (uploadError) {
+      console.error('Admin upload error:', uploadError)
+      return { error: `Failed to upload to storage: ${uploadError.message}` }
+    }
+
+    const { data: urlData } = supabaseAdmin.storage
+      .from('invoices')
+      .getPublicUrl(fileName)
+
+    return { publicUrl: urlData?.publicUrl }
+  } catch (err: any) {
+    console.error('Server upload action crash:', err)
+    return { error: err.message || 'An error occurred during upload.' }
+  }
 }

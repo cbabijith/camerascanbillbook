@@ -163,6 +163,27 @@ export function generateInvoicePDF(bill: Bill, branch: BranchInfo | null): jsPDF
     doc.line(x, y1, x, y2)
   }
 
+  const drawRightAlignedCellText = (
+    text: string,
+    colX: number,
+    colW: number,
+    yVal: number,
+    baseFontSize: number
+  ) => {
+    const rightPadding = 2
+    const maxAvailableWidth = colW - rightPadding - 1 // 1mm safety margin
+    let currentFontSize = baseFontSize
+    doc.setFontSize(currentFontSize)
+    
+    while (doc.getTextWidth(text) > maxAvailableWidth && currentFontSize > 5) {
+      currentFontSize -= 0.5
+      doc.setFontSize(currentFontSize)
+    }
+    
+    doc.text(text, colX + colW - rightPadding, yVal, { align: 'right' })
+    doc.setFontSize(baseFontSize) // Restore base font size
+  }
+
   // ══════════════════════════════════════════════════
   // SECTION 1: TOP BAR — "TAX INVOICE" title
   // ══════════════════════════════════════════════════
@@ -295,12 +316,12 @@ export function generateInvoicePDF(bill: Bill, branch: BranchInfo | null): jsPDF
 
   // Column positions (absolute x values)
   const cols = {
-    sno:    { x: ML,        w: 12  }, // Starts at 10, ends at 22
-    desc:   { x: ML + 12,   w: 93  }, // Starts at 22, ends at 115
-    sku:    { x: ML + 105,  w: 30  }, // Starts at 115, ends at 145
-    qty:    { x: ML + 135,  w: 15  }, // Starts at 145, ends at 160
-    price:  { x: ML + 150,  w: 20  }, // Starts at 160, ends at 180
-    amount: { x: ML + 170,  w: 20  }, // Starts at 180, ends at 200
+    sno:    { x: ML,        w: 10  }, // Starts at 10, ends at 20
+    desc:   { x: ML + 10,   w: 90  }, // Starts at 20, ends at 110
+    sku:    { x: ML + 100,  w: 30  }, // Starts at 110, ends at 140
+    qty:    { x: ML + 130,  w: 12  }, // Starts at 140, ends at 152
+    price:  { x: ML + 142,  w: 23  }, // Starts at 152, ends at 175
+    amount: { x: ML + 165,  w: 25  }, // Starts at 175, ends at 200
   }
 
   // Table header background
@@ -365,11 +386,11 @@ export function generateInvoicePDF(bill: Bill, branch: BranchInfo | null): jsPDF
     doc.text(String(item.qty), cols.qty.x + cols.qty.w / 2, y + 5.5, { align: 'center' })
 
     // Unit price
-    doc.text(formatPDFCurrency(item.sellingPrice), cols.price.x + cols.price.w - 2, y + 5.5, { align: 'right' })
+    drawRightAlignedCellText(formatPDFCurrency(item.sellingPrice), cols.price.x, cols.price.w, y + 5.5, 7.5)
 
     // Amount
     doc.setFont('helvetica', 'bold')
-    doc.text(formatPDFCurrency(item.total), cols.amount.x + cols.amount.w - 2, y + 5.5, { align: 'right' })
+    drawRightAlignedCellText(formatPDFCurrency(item.total), cols.amount.x, cols.amount.w, y + 5.5, 7.5)
     doc.setFont('helvetica', 'normal')
 
     y += rowH
@@ -390,8 +411,7 @@ export function generateInvoicePDF(bill: Bill, branch: BranchInfo | null): jsPDF
   const totalQty = bill.items.reduce((sum, item) => sum + item.qty, 0)
   doc.text(String(totalQty), cols.qty.x + cols.qty.w / 2, y + 5.5, { align: 'center' })
 
-  doc.setFontSize(9)
-  doc.text(formatPDFCurrency(bill.sub_total), cols.amount.x + cols.amount.w - 2, y + 5.5, { align: 'right' })
+  drawRightAlignedCellText(formatPDFCurrency(bill.sub_total), cols.amount.x, cols.amount.w, y + 5.5, 8)
 
   y += totalRowH
 
